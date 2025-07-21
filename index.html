@@ -7,6 +7,8 @@
     <!-- jsPDF and html2canvas for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         /* --- Fonts and Basic Styles --- */
         @import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap');
@@ -118,10 +120,16 @@
             width: calc(100% - 1.5rem);
         }
         
-        .gender-select {
+        .gender-select, #student-form > div {
             display: flex;
             gap: 0.5rem;
             align-items: center;
+        }
+        #student-form {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 1rem;
         }
         
         /* --- Custom Layout Controls --- */
@@ -183,6 +191,7 @@
             max-height: 200px;
             overflow-y: auto;
             border: 4px solid var(--border-color);
+            margin-top: 1rem;
         }
 
         #student-list li {
@@ -194,6 +203,13 @@
         }
         #student-list li:nth-child(even) {
             background-color: #f2f2f2;
+        }
+        .btn-remove {
+             background: none;
+             border: 2px solid var(--border-color);
+             font-family: 'Pixelify Sans', sans-serif;
+             cursor: pointer;
+             font-weight: bold;
         }
 
         /* --- Seating Chart & Desks --- */
@@ -341,7 +357,12 @@
             <!-- Student Management -->
             <section>
                 <h2>학생 명렬</h2>
-                <div id="student-form">
+                <div class="btn-group">
+                    <button id="download-csv" class="btn">명단 내려받기</button>
+                    <button id="upload-csv" class="btn">명단 업로드 (PC)</button>
+                    <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                </div>
+                 <div id="student-form">
                     <input type="number" id="student-number" placeholder="번호 (자동 부여)">
                     <input type="text" id="student-name" placeholder="이름" required>
                     <div class="gender-select">
@@ -406,6 +427,9 @@
             let currentLayout = { cols: 5, isPair: false };
 
             // --- DOM Elements ---
+            const downloadCsvBtn = document.getElementById('download-csv');
+            const uploadCsvBtn = document.getElementById('upload-csv');
+            const csvFileInput = document.getElementById('csv-file-input');
             const studentNumberInput = document.getElementById('student-number');
             const studentNameInput = document.getElementById('student-name');
             const addStudentBtn = document.getElementById('add-student');
@@ -445,11 +469,82 @@
                 studentNumberInput.value = '';
                 studentNameInput.focus();
             }
-
+            
             function removeStudent(id) {
                 students = students.filter(s => s.id !== id);
                 updateStudentList();
                 updateNextStudentNumber();
+                if (desks.length > 0) {
+                    if (students.length === 0) {
+                        seatingChartDiv.innerHTML = '';
+                        desks = [];
+                    } else {
+                         handleLayoutApply();
+                    }
+                }
+            }
+            
+            // --- CSV Functions ---
+            function handleCsvUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                Papa.parse(file, {
+                    complete: (results) => {
+                        processCsvData(results.data);
+                    },
+                    header: false,
+                    skipEmptyLines: true,
+                    encoding: "UTF-8"
+                });
+            }
+
+            function processCsvData(data) {
+                students = [];
+                // Start from row 1 to skip header
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    if (row.length < 3) continue;
+                    const number = parseInt(row[0], 10);
+                    const name = row[1];
+                    const gender = row[2];
+
+                    if (!isNaN(number) && name && gender) {
+                        students.push({
+                            id: Date.now() + i,
+                            number,
+                            name: name.trim(),
+                            gender: gender.trim().toUpperCase()
+                        });
+                    }
+                }
+                students.sort((a, b) => a.number - b.number);
+                updateStudentList();
+                updateNextStudentNumber();
+                alert(`${students.length}명의 학생 명단을 불러왔습니다.`);
+                if (students.length > 0) {
+                    handleLayoutApply();
+                }
+            }
+            
+            function downloadCsv() {
+                if (students.length === 0) {
+                    alert('내려받을 학생 명단이 없습니다. 견본으로 사용하시려면 최소 1명 이상의 학생을 추가해주세요.');
+                    return;
+                }
+                const header = ['번호', '이름', '성별'];
+                const rows = students.map(s => [s.number, s.name, s.gender]);
+                let csvContent = Papa.unparse([header, ...rows]);
+                
+                const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "학생좌석배치_견본.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             }
 
             function updateStudentList() {
@@ -471,7 +566,7 @@
                     const maxNum = Math.max(0, ...students.map(s => s.number));
                     nextStudentNumber = maxNum + 1;
                 }
-                studentNumberInput.placeholder = `번호 (${nextStudentNumber} 자동 부여)`;
+                 studentNumberInput.placeholder = `번호 (${nextStudentNumber} 자동 부여)`;
             }
 
             // --- Layout Management ---
@@ -487,7 +582,9 @@
 
             function createLayout(cols, isPair) {
                 if (students.length === 0) {
-                    alert('학생을 먼저 추가해주세요.');
+                    seatingChartDiv.innerHTML = '';
+                    desks = [];
+                    alert('학생 명단이 비어있습니다. 학생을 추가하거나 명단을 업로드해주세요.');
                     return;
                 }
                 currentLayout = { cols, isPair };
@@ -814,6 +911,10 @@
                     removeStudent(parseInt(e.target.dataset.id));
                 }
             });
+            uploadCsvBtn.addEventListener('click', () => csvFileInput.click());
+            csvFileInput.addEventListener('change', handleCsvUpload);
+            downloadCsvBtn.addEventListener('click', downloadCsv);
+            
             applyLayoutBtn.addEventListener('click', handleLayoutApply);
             pairModeCheckbox.addEventListener('change', updateLayoutColsLabel);
             
@@ -840,3 +941,4 @@
     </script>
 </body>
 </html>
+
