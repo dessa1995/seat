@@ -117,6 +117,14 @@
             flex-wrap: wrap;
             gap: 0.5rem;
         }
+        
+        #delete-all-students {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        #delete-all-students:hover {
+            background-color: #e55337;
+        }
 
         input[type="text"], input[type="number"] {
             font-family: 'Noto Sans KR', sans-serif;
@@ -137,6 +145,12 @@
             flex-direction: column;
             gap: 0.5rem;
             margin-top: 1rem;
+        }
+        
+        .help-text {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 0.5rem;
         }
         
         /* --- Custom Layout Controls --- */
@@ -273,7 +287,6 @@
         }
         .desk.dragging {
             z-index: 1000;
-            cursor: grabbing;
         }
 
         .desk.fixed {
@@ -321,15 +334,22 @@
         }
 
         /* --- Fullscreen Mode --- */
-        #exit-fullscreen-btn {
+        #fullscreen-controls {
             display: none;
             position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 2010;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2020;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 4px solid var(--border-color);
+            box-shadow: 4px 4px 0px 0px var(--border-color);
         }
-        body.fullscreen-mode .app-container {
-            display: block;
+        body.fullscreen-mode #fullscreen-controls {
+            display: flex;
+            gap: 1rem;
         }
         body.fullscreen-mode .controls, body.fullscreen-mode h1 {
             display: none;
@@ -347,8 +367,34 @@
             border: none;
             box-shadow: none;
         }
-        body.fullscreen-mode #exit-fullscreen-btn {
-            display: block;
+        
+        /* --- Modal --- */
+        #confirm-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 3000;
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+        }
+        #confirm-modal {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            border: 4px solid var(--border-color);
+            box-shadow: 4px 4px 0px 0px var(--border-color);
+            text-align: center;
+        }
+        #confirm-modal p {
+            font-size: 1.2rem;
+            margin: 0 0 1.5rem 0;
+        }
+        #confirm-modal .btn-group {
+            justify-content: center;
         }
 
 
@@ -382,8 +428,10 @@
                     <button id="upload-file" class="btn">명단 업로드 (PC)</button>
                     <input type="file" id="file-input" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display: none;">
                 </div>
+                 <p class="help-text">※ 파일이 깨지면, 엑셀에서 '다른 이름으로 저장' > 파일 형식을 'CSV UTF-8'로 선택 후 저장하여 업로드해주세요.</p>
                 <div class="btn-group" style="margin-top: 0.5rem;">
                      <button id="download-current-csv" class="btn">현재 명단 저장</button>
+                     <button id="delete-all-students" class="btn">명단 전체 삭제</button>
                 </div>
                  <div id="student-form">
                     <input type="number" id="student-number" placeholder="번호 (자동 부여)">
@@ -433,9 +481,26 @@
         <!-- Seating Chart -->
         <div id="seating-chart-area" class="seating-chart-container custom-border">
             <div id="teacher-desk">교탁</div>
-            <button id="exit-fullscreen-btn" class="btn">나가기</button>
+            <div id="fullscreen-controls">
+                <button id="fs-shuffle-btn" class="btn">랜덤 배정</button>
+                <button id="fs-reset-btn" class="btn">초기화</button>
+                <button id="fs-toggle-hide-btn" class="btn">책상 가리기</button>
+                <button id="fs-save-preset-btn" class="btn">미리 저장</button>
+                <button id="fs-export-pdf-btn" class="btn">PDF로 저장</button>
+                <button id="exit-fullscreen-btn" class="btn">나가기</button>
+            </div>
             <div id="seating-chart">
                 <!-- Desks will be generated here -->
+            </div>
+        </div>
+    </div>
+    
+    <div id="confirm-modal-overlay">
+        <div id="confirm-modal">
+            <p id="confirm-modal-message"></p>
+            <div class="btn-group">
+                <button id="confirm-modal-yes" class="btn">확인</button>
+                <button id="confirm-modal-no" class="btn">취소</button>
             </div>
         </div>
     </div>
@@ -454,6 +519,7 @@
             const uploadBtn = document.getElementById('upload-file');
             const fileInput = document.getElementById('file-input');
             const downloadCurrentCsvBtn = document.getElementById('download-current-csv');
+            const deleteAllStudentsBtn = document.getElementById('delete-all-students');
             const studentNumberInput = document.getElementById('student-number');
             const studentNameInput = document.getElementById('student-name');
             const addStudentBtn = document.getElementById('add-student-btn');
@@ -471,6 +537,27 @@
             const applyLayoutBtn = document.getElementById('apply-layout');
             const fullscreenBtn = document.getElementById('fullscreen-btn');
             const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
+            const fsShuffleBtn = document.getElementById('fs-shuffle-btn');
+            const fsResetBtn = document.getElementById('fs-reset-btn');
+            const fsToggleHideBtn = document.getElementById('fs-toggle-hide-btn');
+            const fsSavePresetBtn = document.getElementById('fs-save-preset-btn');
+            const fsExportPdfBtn = document.getElementById('fs-export-pdf-btn');
+            const confirmModalOverlay = document.getElementById('confirm-modal-overlay');
+            const confirmModalMessage = document.getElementById('confirm-modal-message');
+            const confirmModalYes = document.getElementById('confirm-modal-yes');
+            const confirmModalNo = document.getElementById('confirm-modal-no');
+
+            // --- Modal Logic ---
+            let confirmCallback = null;
+            function showConfirm(message, callback) {
+                confirmModalMessage.textContent = message;
+                confirmCallback = callback;
+                confirmModalOverlay.style.display = 'flex';
+            }
+            function hideConfirm() {
+                confirmModalOverlay.style.display = 'none';
+                confirmCallback = null;
+            }
 
             // --- Student Management ---
             function saveStudent() {
@@ -542,6 +629,15 @@
                 }
             }
             
+            function deleteAllStudents() {
+                students = [];
+                desks = [];
+                seatingChartDiv.innerHTML = '';
+                cancelEdit();
+                updateStudentList();
+                updateNextStudentNumber();
+            }
+
             // --- File Handling (XLSX & CSV) ---
             function handleFileUpload(event) {
                 const file = event.target.files[0];
@@ -576,7 +672,6 @@
 
             function processData(data) {
                 const tempStudents = [];
-                // Start from row 1 (2열) to skip header
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
                     if (row.length < 2 || !row[1]) continue;
@@ -706,7 +801,7 @@
                 const hGap = 20;
                 const vGap = 40;
                 const pairGap = 10;
-                const teacherDeskOffset = 100;
+                const teacherDeskOffset = 80;
 
                 let maxW = 0;
                 let maxH = 0;
@@ -752,10 +847,10 @@
                 const scaledHeight = maxH * scale;
 
                 const newLeft = (containerW - scaledWidth) / 2;
-                const newTop = teacherDeskOffset + (availableH - scaledHeight) / 2;
+                const newTop = teacherDeskOffset;
 
                 seatingChartDiv.style.left = `${Math.max(0, newLeft)}px`;
-                seatingChartDiv.style.top = `${Math.max(teacherDeskOffset, newTop)}px`;
+                seatingChartDiv.style.top = `${newTop}px`;
             }
 
             function createDeskElement(student, index) {
@@ -781,7 +876,7 @@
 
             // --- Core Functions ---
             function shuffleSeats(event) {
-                if (event.ctrlKey) {
+                if (event && event.ctrlKey) {
                     loadPreset();
                     return;
                 }
@@ -838,7 +933,9 @@
             function toggleHideAll() {
                 areDesksHidden = !areDesksHidden;
                 desks.forEach(d => d.element.classList.toggle('hidden', areDesksHidden));
-                toggleHideBtn.textContent = areDesksHidden ? '전체 공개' : '책상 가리기';
+                const buttonText = areDesksHidden ? '전체 공개' : '책상 가리기';
+                toggleHideBtn.textContent = buttonText;
+                fsToggleHideBtn.textContent = buttonText;
             }
             
             function revealSingleDesk(deskElement) {
@@ -852,9 +949,26 @@
                 element.onmousedown = e => {
                     e.preventDefault();
                     const deskData = desks.find(d => d.element === element);
-                    if (deskData && deskData.fixed) return;
+                    if (!deskData || deskData.fixed) return;
                     
                     element.classList.add('dragging');
+
+                    const isPair = currentLayout.isPair;
+                    let partnerElement = null;
+                    let partnerStartLeft = 0;
+                    let partnerStartTop = 0;
+
+                    if (isPair) {
+                        const myIndex = deskData.originalIndex;
+                        const partnerIndex = (myIndex % 2 === 0) ? myIndex + 1 : myIndex - 1;
+                        const partnerData = desks.find(d => d.originalIndex === partnerIndex);
+                        if (partnerData) {
+                            partnerElement = partnerData.element;
+                            partnerElement.classList.add('dragging');
+                            partnerStartLeft = partnerElement.offsetLeft;
+                            partnerStartTop = partnerElement.offsetTop;
+                        }
+                    }
 
                     const scale = parseFloat(seatingChartDiv.style.transform.replace('scale(', '')) || 1;
                     const startLeft = element.offsetLeft;
@@ -870,10 +984,18 @@
                         
                         element.style.left = `${startLeft + dx}px`;
                         element.style.top = `${startTop + dy}px`;
+
+                        if (partnerElement) {
+                            partnerElement.style.left = `${partnerStartLeft + dx}px`;
+                            partnerElement.style.top = `${partnerStartTop + dy}px`;
+                        }
                     };
 
                     document.onmouseup = () => {
                         element.classList.remove('dragging');
+                        if (partnerElement) {
+                            partnerElement.classList.remove('dragging');
+                        }
                         document.onmouseup = null;
                         document.onmousemove = null;
                     };
@@ -962,6 +1084,7 @@
             
             function toggleFullscreen() {
                 document.body.classList.toggle('fullscreen-mode');
+                fsToggleHideBtn.textContent = areDesksHidden ? '전체 공개' : '책상 가리기';
                 setTimeout(arrangeAndScaleDesks, 50);
             }
 
@@ -977,6 +1100,15 @@
             uploadBtn.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', handleFileUpload);
             downloadCurrentCsvBtn.addEventListener('click', downloadCurrentCsv);
+            deleteAllStudentsBtn.addEventListener('click', () => {
+                showConfirm('정말로 모든 학생 명단을 삭제하시겠습니까?', deleteAllStudents);
+            });
+            
+            confirmModalYes.addEventListener('click', () => {
+                if (confirmCallback) confirmCallback();
+                hideConfirm();
+            });
+            confirmModalNo.addEventListener('click', hideConfirm);
             
             applyLayoutBtn.addEventListener('click', handleLayoutApply);
             pairModeCheckbox.addEventListener('change', updateLayoutColsLabel);
@@ -995,6 +1127,12 @@
             exportPdfBtn.addEventListener('click', exportToPDF);
             fullscreenBtn.addEventListener('click', toggleFullscreen);
             exitFullscreenBtn.addEventListener('click', toggleFullscreen);
+            fsShuffleBtn.addEventListener('click', shuffleSeats);
+            fsResetBtn.addEventListener('click', resetSeats);
+            fsToggleHideBtn.addEventListener('click', toggleHideAll);
+            fsSavePresetBtn.addEventListener('click', savePreset);
+            fsExportPdfBtn.addEventListener('click', exportToPDF);
+            
             window.addEventListener('resize', arrangeAndScaleDesks);
             
             // --- Initial Setup ---
