@@ -9,6 +9,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <!-- PapaParse for CSV parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <!-- SheetJS for XLSX parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         /* --- Fonts and Basic Styles --- */
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
@@ -38,8 +40,8 @@
             box-sizing: border-box;
         }
 
-        /* --- Pixelated Border Style --- */
-        .pixel-border {
+        /* --- Custom Border Style --- */
+        .custom-border {
             border: 4px solid var(--border-color);
             box-shadow: 4px 4px 0px 0px var(--border-color);
             background-color: white;
@@ -135,12 +137,6 @@
             flex-direction: column;
             gap: 0.5rem;
             margin-top: 1rem;
-        }
-        
-        .help-text {
-            font-size: 0.8rem;
-            color: #666;
-            margin-top: 0.5rem;
         }
         
         /* --- Custom Layout Controls --- */
@@ -377,16 +373,15 @@
 
     <div class="app-container">
         <!-- Control Panel -->
-        <div class="controls pixel-border">
+        <div class="controls custom-border">
             <!-- Student Management -->
             <section>
                 <h2>학생 명렬</h2>
                 <div class="btn-group">
-                    <a href="https://drive.google.com/uc?export=download&id=14U3BCnAlipCbsPWru9v-FhlXM8fQC_w7" download="학생명단_양식.csv" class="btn">명단 양식 내려받기</a>
-                    <button id="upload-csv" class="btn">명단 업로드 (PC)</button>
-                    <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                    <a href="https://drive.google.com/uc?export=download&id=14U3BCnAlipCbsPWru9v-FhlXM8fQC_w7" download="학생명단_양식.xlsx" class="btn">명단 양식 내려받기</a>
+                    <button id="upload-file" class="btn">명단 업로드 (PC)</button>
+                    <input type="file" id="file-input" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display: none;">
                 </div>
-                 <p class="help-text">※ 파일이 깨지면, 엑셀에서 '다른 이름으로 저장' > 파일 형식을 'CSV UTF-8'로 선택 후 저장하여 업로드해주세요.</p>
                 <div class="btn-group" style="margin-top: 0.5rem;">
                      <button id="download-current-csv" class="btn">현재 명단 저장</button>
                 </div>
@@ -436,7 +431,7 @@
         </div>
 
         <!-- Seating Chart -->
-        <div id="seating-chart-area" class="seating-chart-container pixel-border">
+        <div id="seating-chart-area" class="seating-chart-container custom-border">
             <div id="teacher-desk">교탁</div>
             <button id="exit-fullscreen-btn" class="btn">나가기</button>
             <div id="seating-chart">
@@ -456,8 +451,8 @@
             let editingStudentId = null;
 
             // --- DOM Elements ---
-            const uploadCsvBtn = document.getElementById('upload-csv');
-            const csvFileInput = document.getElementById('csv-file-input');
+            const uploadBtn = document.getElementById('upload-file');
+            const fileInput = document.getElementById('file-input');
             const downloadCurrentCsvBtn = document.getElementById('download-current-csv');
             const studentNumberInput = document.getElementById('student-number');
             const studentNameInput = document.getElementById('student-name');
@@ -518,7 +513,7 @@
                     studentNameInput.value = student.name;
                     document.querySelector(`input[name="gender"][value="${student.gender}"]`).checked = true;
                     addStudentBtn.textContent = '학생 수정';
-                    studentNumberInput.focus();
+                    studentNameInput.focus();
                 }
             }
 
@@ -547,45 +542,48 @@
                 }
             }
             
-            // --- CSV Functions ---
-            function handleCsvUpload(event) {
+            // --- File Handling (XLSX & CSV) ---
+            function handleFileUpload(event) {
                 const file = event.target.files[0];
                 if (!file) return;
 
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    const text = e.target.result;
-                    Papa.parse(text, {
-                        complete: (results) => {
-                            processCsvData(results.data);
-                        },
-                        header: false,
-                        skipEmptyLines: true
-                    });
+                reader.onload = (e) => {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    processData(json);
                 };
-                reader.readAsText(file, "EUC-KR"); // Try reading as EUC-KR first
+                reader.onerror = (e) => {
+                    console.error("File reading error:", e);
+                    alert("파일을 읽는 중 오류가 발생했습니다.");
+                };
+                reader.readAsArrayBuffer(file);
             }
 
             function normalizeGender(genderStr) {
                 if (!genderStr) return 'M';
-                const maleKeywords = ['남', '남자', '남성', '남학생', 'm', 'male', 'man'];
-                const femaleKeywords = ['여', '여자', '여성', '녀', '여학생', 'f', 'female', 'woman', 'w'];
-                const lowerGender = genderStr.trim().toLowerCase();
+                const maleKeywords = ['남자', '남성', '남', 'man', 'male', 'm'];
+                const femaleKeywords = ['여자', '여성', '여', 'woman', 'female', 'w', 'f'];
+                const lowerGender = String(genderStr).trim().toLowerCase();
 
                 if (maleKeywords.includes(lowerGender)) return 'M';
                 if (femaleKeywords.includes(lowerGender)) return 'F';
                 return 'M';
             }
 
-            function processCsvData(data) {
+            function processData(data) {
                 const tempStudents = [];
+                // Start from row 1 (2열) to skip header
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
                     if (row.length < 2 || !row[1]) continue;
                     
                     tempStudents.push({
                         rawNumber: row[0] || '',
-                        name: row[1].trim(),
+                        name: String(row[1]).trim(),
                         gender: normalizeGender(row[2] || '')
                     });
                 }
@@ -976,8 +974,8 @@
                     editStudent(parseFloat(e.target.dataset.id));
                 }
             });
-            uploadCsvBtn.addEventListener('click', () => csvFileInput.click());
-            csvFileInput.addEventListener('change', handleCsvUpload);
+            uploadBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileUpload);
             downloadCurrentCsvBtn.addEventListener('click', downloadCurrentCsv);
             
             applyLayoutBtn.addEventListener('click', handleLayoutApply);
