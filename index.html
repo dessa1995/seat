@@ -204,16 +204,22 @@
             justify-content: space-between;
             align-items: center;
             background-color: #fff;
+            gap: 0.5rem;
         }
         #student-list li:nth-child(even) {
             background-color: #f2f2f2;
         }
-        .btn-remove {
+        .list-btn-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .btn-edit, .btn-remove {
              background: none;
              border: 2px solid var(--border-color);
              font-family: 'Pixelify Sans', sans-serif;
              cursor: pointer;
              font-weight: bold;
+             padding: 2px 5px;
         }
 
         /* --- Seating Chart & Desks --- */
@@ -362,7 +368,7 @@
             <section>
                 <h2>학생 명렬</h2>
                 <div class="btn-group">
-                    <a href="https://docs.google.com/uc?export=download&id=1PjoxX3O7A6bYIoSbf361v7kewYqXoc1F" download="학생명단_양식.csv" class="btn">명단 양식 내려받기</a>
+                    <a href="https://docs.google.com/spreadsheets/d/1PjoxX3O7A6bYIoSbf361v7kewYqXoc1F/export?format=csv" download="학생명단_양식.csv" class="btn">명단 양식 내려받기</a>
                     <button id="upload-csv" class="btn">명단 업로드 (PC)</button>
                     <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
                 </div>
@@ -376,7 +382,7 @@
                         <label><input type="radio" name="gender" value="M" checked> 남</label>
                         <label><input type="radio" name="gender" value="F"> 여</label>
                     </div>
-                    <button id="add-student" class="btn">학생 추가</button>
+                    <button id="add-student-btn" class="btn">학생 추가</button>
                 </div>
                 <ul id="student-list"></ul>
             </section>
@@ -432,6 +438,7 @@
             let nextStudentNumber = 1;
             let areDesksHidden = false;
             let currentLayout = { cols: 5, isPair: false };
+            let editingStudentId = null;
 
             // --- DOM Elements ---
             const uploadCsvBtn = document.getElementById('upload-csv');
@@ -439,7 +446,7 @@
             const downloadCurrentCsvBtn = document.getElementById('download-current-csv');
             const studentNumberInput = document.getElementById('student-number');
             const studentNameInput = document.getElementById('student-name');
-            const addStudentBtn = document.getElementById('add-student');
+            const addStudentBtn = document.getElementById('add-student-btn');
             const studentListUl = document.getElementById('student-list');
             const seatingChartArea = document.getElementById('seating-chart-area');
             const seatingChartDiv = document.getElementById('seating-chart');
@@ -456,28 +463,62 @@
             const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
 
             // --- Student Management ---
-            function addStudent() {
+            function saveStudent() {
                 const name = studentNameInput.value.trim();
                 if (!name) {
                     alert('학생 이름을 입력하세요.');
                     return;
                 }
-                const number = studentNumberInput.value ? parseInt(studentNumberInput.value) : nextStudentNumber;
+                const number = parseInt(studentNumberInput.value);
                 const gender = document.querySelector('input[name="gender"]:checked').value;
-                if (students.some(s => s.number === number)) {
+
+                // Check for duplicate number when adding a new student or changing number
+                if (students.some(s => s.number === number && s.id !== editingStudentId)) {
                     alert('이미 사용 중인 번호입니다.');
                     return;
                 }
-                students.push({ id: Date.now(), number, name, gender });
+                
+                if (editingStudentId) { // Update existing student
+                    const student = students.find(s => s.id === editingStudentId);
+                    if (student) {
+                        student.number = isNaN(number) ? student.number : number;
+                        student.name = name;
+                        student.gender = gender;
+                    }
+                } else { // Add new student
+                    const finalNumber = isNaN(number) ? nextStudentNumber : number;
+                    students.push({ id: Date.now(), number: finalNumber, name, gender });
+                }
+
                 students.sort((a, b) => a.number - b.number);
+                cancelEdit(); // Reset form
                 updateStudentList();
                 updateNextStudentNumber();
-                studentNameInput.value = '';
-                studentNumberInput.value = '';
-                studentNameInput.focus();
             }
             
+            function editStudent(id) {
+                const student = students.find(s => s.id === id);
+                if (student) {
+                    editingStudentId = id;
+                    studentNumberInput.value = student.number;
+                    studentNameInput.value = student.name;
+                    document.querySelector(`input[name="gender"][value="${student.gender}"]`).checked = true;
+                    addStudentBtn.textContent = '학생 수정';
+                    studentNumberInput.focus();
+                }
+            }
+
+            function cancelEdit() {
+                editingStudentId = null;
+                studentNumberInput.value = '';
+                studentNameInput.value = '';
+                addStudentBtn.textContent = '학생 추가';
+            }
+
             function removeStudent(id) {
+                if (editingStudentId === id) {
+                    cancelEdit();
+                }
                 students = students.filter(s => s.id !== id);
                 updateStudentList();
                 updateNextStudentNumber();
@@ -491,7 +532,7 @@
                 }
             }
             
-            // --- CSV Functions ---
+            // --- CSV and Google Sheet Functions ---
             function handleCsvUpload(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -506,25 +547,53 @@
                 });
             }
 
+            function normalizeGender(genderStr) {
+                if (!genderStr) return 'M'; // Default
+                const maleKeywords = ['남', '남자', '남성', '남학생', 'm', 'male', 'man'];
+                const femaleKeywords = ['여', '여자', '여성', '녀', '여학생', 'f', 'female', 'woman', 'w'];
+                const lowerGender = genderStr.trim().toLowerCase();
+
+                if (maleKeywords.includes(lowerGender)) return 'M';
+                if (femaleKeywords.includes(lowerGender)) return 'F';
+                return 'M'; // Default if no match
+            }
+
             function processCsvData(data) {
-                students = [];
+                const tempStudents = [];
                 // Start from row 1 to skip header
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
-                    if (row.length < 3) continue;
-                    const number = parseInt(row[0], 10);
-                    const name = row[1];
-                    const gender = row[2];
-
-                    if (!isNaN(number) && name && gender) {
-                        students.push({
-                            id: Date.now() + i,
-                            number,
-                            name: name.trim(),
-                            gender: gender.trim().toUpperCase()
-                        });
-                    }
+                    if (row.length < 2 || !row[1]) continue; // Must have at least a name
+                    
+                    tempStudents.push({
+                        rawNumber: row[0] || '',
+                        name: row[1].trim(),
+                        gender: normalizeGender(row[2] || '')
+                    });
                 }
+                
+                // Assign numbers
+                let maxNum = 0;
+                students = []; // Clear existing students
+                
+                // First pass for students with numbers
+                tempStudents.forEach(s => {
+                    const num = parseInt(s.rawNumber, 10);
+                    if (!isNaN(num)) {
+                        students.push({ id: Date.now() + Math.random(), number: num, name: s.name, gender: s.gender });
+                        if (num > maxNum) maxNum = num;
+                    }
+                });
+                
+                // Second pass for students without numbers
+                tempStudents.forEach(s => {
+                    const num = parseInt(s.rawNumber, 10);
+                    if (isNaN(num)) {
+                        maxNum++;
+                        students.push({ id: Date.now() + Math.random(), number: maxNum, name: s.name, gender: s.gender });
+                    }
+                });
+
                 students.sort((a, b) => a.number - b.number);
                 updateStudentList();
                 updateNextStudentNumber();
@@ -560,7 +629,10 @@
                     const li = document.createElement('li');
                     li.innerHTML = `
                         <span>${student.number}. ${student.name} (${student.gender})</span>
-                        <button class="btn-remove" data-id="${student.id}">X</button>
+                        <div class="list-btn-group">
+                            <button class="btn-edit" data-id="${student.id}">수정</button>
+                            <button class="btn-remove" data-id="${student.id}">X</button>
+                        </div>
                     `;
                     studentListUl.appendChild(li);
                 });
@@ -911,11 +983,12 @@
             }
 
             // --- Event Listeners ---
-            addStudentBtn.addEventListener('click', addStudent);
-            studentNameInput.addEventListener('keypress', e => e.key === 'Enter' && addStudent());
+            addStudentBtn.addEventListener('click', saveStudent);
             studentListUl.addEventListener('click', e => {
                 if (e.target.classList.contains('btn-remove')) {
                     removeStudent(parseInt(e.target.dataset.id));
+                } else if (e.target.classList.contains('btn-edit')) {
+                    editStudent(parseInt(e.target.dataset.id));
                 }
             });
             uploadCsvBtn.addEventListener('click', () => csvFileInput.click());
