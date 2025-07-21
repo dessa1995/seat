@@ -397,6 +397,16 @@
             justify-content: center;
         }
 
+        /* --- Footer Notice --- */
+        .footer-notice {
+            margin-top: auto;
+            padding-top: 1rem;
+            font-size: 0.8rem;
+            color: #666;
+            text-align: center;
+            border-top: 2px dashed #ccc;
+        }
+
 
         /* --- Responsive Design --- */
         @media (max-width: 768px) {
@@ -428,9 +438,8 @@
                     <button id="upload-file" class="btn">명단 업로드 (PC)</button>
                     <input type="file" id="file-input" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display: none;">
                 </div>
-                 <p class="help-text">※ 파일이 깨지면, 엑셀에서 '다른 이름으로 저장' > 파일 형식을 'CSV UTF-8'로 선택 후 저장하여 업로드해주세요.</p>
                 <div class="btn-group" style="margin-top: 0.5rem;">
-                     <button id="download-current-csv" class="btn">현재 명단 저장</button>
+                     <button id="download-student-list" class="btn">현재 명단 저장</button>
                      <button id="delete-all-students" class="btn">명단 전체 삭제</button>
                 </div>
                  <div id="student-form">
@@ -476,6 +485,11 @@
                     <button id="export-pdf" class="btn">PDF로 저장</button>
                 </div>
             </section>
+
+            <!-- Footer Notice -->
+            <div class="footer-notice">
+                <p>명단 업로드 이후 텍스트 입력이 불가능한 경우 잠시만 기다려 주세요.</p>
+            </div>
         </div>
 
         <!-- Seating Chart -->
@@ -505,6 +519,11 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.8); z-index: 4000; justify-content: center; align-items: center; color: #333; font-size: 1.5rem; font-weight: bold; text-align: center;">
+        <p>엑셀 파일을 처리 중입니다.<br>잠시만 기다려주세요...</p>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- State Management ---
@@ -518,7 +537,7 @@
             // --- DOM Elements ---
             const uploadBtn = document.getElementById('upload-file');
             const fileInput = document.getElementById('file-input');
-            const downloadCurrentCsvBtn = document.getElementById('download-current-csv');
+            const downloadStudentListBtn = document.getElementById('download-student-list');
             const deleteAllStudentsBtn = document.getElementById('delete-all-students');
             const studentNumberInput = document.getElementById('student-number');
             const studentNameInput = document.getElementById('student-name');
@@ -546,6 +565,7 @@
             const confirmModalMessage = document.getElementById('confirm-modal-message');
             const confirmModalYes = document.getElementById('confirm-modal-yes');
             const confirmModalNo = document.getElementById('confirm-modal-no');
+            const loadingOverlay = document.getElementById('loading-overlay');
 
             // --- Modal Logic ---
             let confirmCallback = null;
@@ -643,18 +663,32 @@
                 const file = event.target.files[0];
                 if (!file) return;
 
+                loadingOverlay.style.display = 'flex'; // Show loader
+
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    const data = e.target.result;
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    processData(json);
+                    // Defer heavy processing to unblock UI
+                    setTimeout(() => {
+                        try {
+                            const data = e.target.result;
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const firstSheetName = workbook.SheetNames[0];
+                            const worksheet = workbook.Sheets[firstSheetName];
+                            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                            processData(json);
+                        } catch (err) {
+                            console.error("파일 처리 중 오류 발생:", err);
+                            alert("파일을 처리하는 중 오류가 발생했습니다.");
+                        } finally {
+                            loadingOverlay.style.display = 'none'; // Hide loader
+                            fileInput.value = ''; // Reset file input to allow re-uploading the same file
+                        }
+                    }, 50); // 50ms delay to ensure loader is rendered
                 };
-                reader.onerror = (e) => {
-                    console.error("File reading error:", e);
+                reader.onerror = (err) => {
+                    console.error("파일 읽기 오류:", err);
                     alert("파일을 읽는 중 오류가 발생했습니다.");
+                    loadingOverlay.style.display = 'none';
                 };
                 reader.readAsArrayBuffer(file);
             }
@@ -708,26 +742,37 @@
                 students.sort((a, b) => a.number - b.number);
                 updateStudentList();
                 updateNextStudentNumber();
-                alert(`${students.length}명의 학생 명단을 불러왔습니다.`);
+                
+                // Use setTimeout to prevent alert from blocking the UI render thread in Electron.
+                setTimeout(() => {
+                    alert(`${students.length}명의 학생 명단을 불러왔습니다.`);
+                }, 0);
+                
                 if (students.length > 0) {
                     handleLayoutApply();
                 }
             }
             
-            function downloadCurrentCsv() {
+            function downloadStudentListAsXlsx() {
                 if (students.length === 0) {
                     alert('저장할 학생 명단이 없습니다.');
                     return;
                 }
                 const header = ['번호', '이름', '성별'];
-                const rows = students.map(s => [s.number, s.name, s.gender]);
-                let csvContent = Papa.unparse([header, ...rows]);
+                const data = students.map(s => [s.number, s.name, s.gender]);
+                const worksheetData = [header, ...data];
+
+                const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, '학생명단');
+
+                const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+                const blob = new Blob([wbout], { type: 'application/octet-stream' });
                 
-                const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement("a");
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
-                link.setAttribute("download", "현재_학생명단.csv");
+                link.setAttribute("download", "현재_학생명단.xlsx");
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
@@ -801,7 +846,9 @@
                 const hGap = 20;
                 const vGap = 40;
                 const pairGap = 10;
-                const teacherDeskOffset = 80;
+                const teacherDeskHeight = 50;
+                const teacherDeskMargin = 30;
+                const teacherDeskOffset = teacherDeskHeight + teacherDeskMargin;
 
                 let maxW = 0;
                 let maxH = 0;
@@ -844,7 +891,6 @@
                 seatingChartDiv.style.transform = `scale(${scale})`;
 
                 const scaledWidth = maxW * scale;
-                const scaledHeight = maxH * scale;
 
                 const newLeft = (containerW - scaledWidth) / 2;
                 const newTop = teacherDeskOffset;
@@ -856,6 +902,10 @@
             function createDeskElement(student, index) {
                 const desk = document.createElement('div');
                 desk.className = 'desk';
+                // [MODIFIED] Respect the hidden state on creation
+                if (areDesksHidden) {
+                    desk.classList.add('hidden');
+                }
                 desk.dataset.index = index;
                 desk.innerHTML = `
                     <div class="desk-header">
@@ -877,7 +927,7 @@
             // --- Core Functions ---
             function shuffleSeats(event) {
                 if (event && event.ctrlKey) {
-                    loadPreset();
+                    loadPreset({ silent: true });
                     return;
                 }
                 const fixedStudents = desks.filter(d => d.fixed).map(d => d.student);
@@ -944,7 +994,6 @@
                 }
             }
 
-            // --- Drag and Drop with Collision Detection ---
             function makeDraggable(element) {
                 element.onmousedown = e => {
                     e.preventDefault();
@@ -953,16 +1002,15 @@
                     
                     element.classList.add('dragging');
 
-                    const isPair = currentLayout.isPair;
                     let partnerElement = null;
-                    let partnerStartLeft = 0;
-                    let partnerStartTop = 0;
+                    let partnerStartLeft = 0, partnerStartTop = 0;
 
-                    if (isPair) {
-                        const myIndex = deskData.originalIndex;
-                        const partnerIndex = (myIndex % 2 === 0) ? myIndex + 1 : myIndex - 1;
-                        const partnerData = desks.find(d => d.originalIndex === partnerIndex);
-                        if (partnerData) {
+                    if (currentLayout.isPair) {
+                        const myOriginalIndex = deskData.originalIndex;
+                        const partnerOriginalIndex = (myOriginalIndex % 2 === 0) ? myOriginalIndex + 1 : myOriginalIndex - 1;
+                        const partnerData = desks.find(d => d.originalIndex === partnerOriginalIndex);
+
+                        if (partnerData && !partnerData.fixed) {
                             partnerElement = partnerData.element;
                             partnerElement.classList.add('dragging');
                             partnerStartLeft = partnerElement.offsetLeft;
@@ -984,7 +1032,7 @@
                         
                         element.style.left = `${startLeft + dx}px`;
                         element.style.top = `${startTop + dy}px`;
-
+                        
                         if (partnerElement) {
                             partnerElement.style.left = `${partnerStartLeft + dx}px`;
                             partnerElement.style.top = `${partnerStartTop + dy}px`;
@@ -1009,10 +1057,12 @@
                     return;
                 }
                 const preset = {
+                    students: students,
                     layout: currentLayout,
                     deskStates: desks.map(d => ({
                         studentId: d.student ? d.student.id : null,
                         fixed: d.fixed,
+                        originalIndex: d.originalIndex,
                         left: d.element.style.left,
                         top: d.element.style.top
                     }))
@@ -1021,43 +1071,72 @@
                 alert('현재 배치를 저장했습니다.');
             }
 
-            function loadPreset() {
+            function loadPreset(options = { silent: false }) {
                 const presetJSON = localStorage.getItem('seatingChartPreset');
                 if (!presetJSON) {
-                    alert('저장된 배치 정보가 없습니다.');
-                    return;
-                }
-                const preset = JSON.parse(presetJSON);
-                if (preset.deskStates.length !== students.length) {
-                    alert('저장된 배치의 학생 수와 현재 학생 수가 다릅니다.');
+                    if (!options.silent) alert('저장된 배치 정보가 없습니다.');
                     return;
                 }
 
-                pairModeCheckbox.checked = preset.layout.isPair;
-                layoutColsInput.value = preset.layout.cols;
-                updateLayoutColsLabel();
-                createLayout(preset.layout.cols, preset.layout.isPair);
+                // [MODIFIED] Temporarily disable transitions to prevent "shining"
+                seatingChartDiv.style.transition = 'none';
+                document.querySelectorAll('.desk').forEach(d => d.style.transition = 'none');
 
-                preset.deskStates.forEach((p, i) => {
-                    const deskData = desks[i];
-                    if(!deskData) return;
+                try {
+                    const preset = JSON.parse(presetJSON);
+                    students = preset.students || [];
+                    updateStudentList();
+                    updateNextStudentNumber();
 
-                    const student = students.find(s => s.id === p.studentId);
-                    deskData.student = student;
-                    deskData.fixed = p.fixed;
-                    updateDeskInfo(deskData.element, student);
-                    deskData.element.classList.toggle('fixed', p.fixed);
-                    deskData.element.querySelector('.btn-fix').textContent = p.fixed ? '해제' : '고정';
-                    deskData.element.style.left = p.left;
-                    deskData.element.style.top = p.top;
-                });
-                arrangeAndScaleDesks();
-                alert('저장된 배치를 불러왔습니다.');
+                    if (preset.deskStates.length !== students.length) {
+                        if (!options.silent) alert('저장된 배치의 학생 수와 불러온 학생 수가 다릅니다. 배치를 초기화합니다.');
+                        handleLayoutApply();
+                        return;
+                    }
+
+                    pairModeCheckbox.checked = preset.layout.isPair;
+                    layoutColsInput.value = preset.layout.cols;
+                    updateLayoutColsLabel();
+                    createLayout(preset.layout.cols, preset.layout.isPair);
+
+                    preset.deskStates.forEach((pState) => {
+                        const deskData = desks.find(d => d.originalIndex === pState.originalIndex);
+                        if(!deskData) return;
+
+                        const student = students.find(s => s.id === pState.studentId);
+                        deskData.student = student;
+                        deskData.fixed = pState.fixed;
+                        
+                        updateDeskInfo(deskData.element, student);
+                        deskData.element.classList.toggle('fixed', pState.fixed);
+                        deskData.element.querySelector('.btn-fix').textContent = pState.fixed ? '해제' : '고정';
+                        
+                        if (pState.left && pState.top) {
+                            deskData.element.style.left = pState.left;
+                            deskData.element.style.top = pState.top;
+                        }
+                    });
+                    
+                    if (!options.silent) {
+                        alert('저장된 배치를 불러왔습니다.');
+                    }
+                } finally {
+                    // [MODIFIED] Restore transitions after a short delay
+                    setTimeout(() => {
+                        seatingChartDiv.style.transition = '';
+                        document.querySelectorAll('.desk').forEach(deskEl => deskEl.style.transition = '');
+                    }, 50);
+                }
             }
 
             function exportToPDF() {
                 const chartArea = document.getElementById('seating-chart-area');
                 alert('PDF 생성을 시작합니다. 잠시만 기다려주세요...');
+
+                // [MODIFIED] Temporarily remove 'fixed' class for neutral PDF appearance
+                const fixedElements = Array.from(chartArea.querySelectorAll('.desk.fixed'));
+                fixedElements.forEach(el => el.classList.remove('fixed'));
+
                 html2canvas(chartArea, { scale: 2 }).then(canvas => {
                     const imgData = canvas.toDataURL('image/png');
                     const { jsPDF } = window.jspdf;
@@ -1071,6 +1150,9 @@
                 }).catch(err => {
                     console.error("PDF 생성 오류:", err);
                     alert("PDF 생성에 실패했습니다. 콘솔을 확인해주세요.");
+                }).finally(() => {
+                    // [MODIFIED] Always restore the 'fixed' class
+                    fixedElements.forEach(el => el.classList.add('fixed'));
                 });
             }
             
@@ -1097,9 +1179,35 @@
                     editStudent(parseFloat(e.target.dataset.id));
                 }
             });
-            uploadBtn.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', handleFileUpload);
-            downloadCurrentCsvBtn.addEventListener('click', downloadCurrentCsv);
+            
+            if (window.electronAPI) {
+                uploadBtn.addEventListener('click', async () => {
+                    const file = await window.electronAPI.openFileDialog();
+                    if (file && file.content) {
+                        loadingOverlay.style.display = 'flex';
+                        setTimeout(() => {
+                            try {
+                                const workbook = XLSX.read(file.content, { type: 'buffer' });
+                                const firstSheetName = workbook.SheetNames[0];
+                                const worksheet = workbook.Sheets[firstSheetName];
+                                const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                                processData(json);
+                            } catch (e) {
+                                console.error("파일 처리 중 오류 발생:", e);
+                                alert("파일을 처리하는 중 오류가 발생했습니다.");
+                            } finally {
+                                loadingOverlay.style.display = 'none';
+                            }
+                        }, 50);
+                    }
+                });
+            } else {
+                uploadBtn.addEventListener('click', () => fileInput.click());
+                fileInput.addEventListener('change', handleFileUpload);
+            }
+
+            downloadStudentListBtn.addEventListener('click', downloadStudentListAsXlsx);
+            
             deleteAllStudentsBtn.addEventListener('click', () => {
                 showConfirm('정말로 모든 학생 명단을 삭제하시겠습니까?', deleteAllStudents);
             });
@@ -1124,6 +1232,10 @@
             resetBtn.addEventListener('click', resetSeats);
             toggleHideBtn.addEventListener('click', toggleHideAll);
             savePresetBtn.addEventListener('click', savePreset);
+            shuffleBtn.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                loadPreset();
+            });
             exportPdfBtn.addEventListener('click', exportToPDF);
             fullscreenBtn.addEventListener('click', toggleFullscreen);
             exitFullscreenBtn.addEventListener('click', toggleFullscreen);
