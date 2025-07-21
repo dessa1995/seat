@@ -84,7 +84,7 @@
         }
 
         /* --- Buttons and Inputs --- */
-        .btn {
+        .btn, a.btn {
             font-family: 'Pixelify Sans', sans-serif;
             font-size: 1rem;
             padding: 0.75rem 1rem;
@@ -93,15 +93,19 @@
             cursor: pointer;
             transition: background-color 0.2s, box-shadow 0.2s, transform 0.2s;
             box-shadow: 4px 4px 0px 0px var(--border-color);
+            text-decoration: none;
+            color: var(--text-color);
+            display: inline-block;
+            text-align: center;
         }
 
-        .btn:hover, .btn:focus {
+        .btn:hover, .btn:focus, a.btn:hover, a.btn:focus {
             background-color: var(--button-hover-bg);
             box-shadow: 2px 2px 0px 0px var(--border-color);
             transform: translate(2px, 2px);
         }
         
-        .btn:active {
+        .btn:active, a.btn:active {
             box-shadow: 0px 0px 0px 0px var(--border-color);
             transform: translate(4px, 4px);
         }
@@ -358,9 +362,12 @@
             <section>
                 <h2>학생 명렬</h2>
                 <div class="btn-group">
-                    <button id="download-csv" class="btn">명단 내려받기</button>
+                    <a href="https://docs.google.com/uc?export=download&id=1PjoxX3O7A6bYIoSbf361v7kewYqXoc1F" download="학생명단_양식.csv" class="btn">명단 양식 내려받기</a>
                     <button id="upload-csv" class="btn">명단 업로드 (PC)</button>
                     <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                </div>
+                <div class="btn-group" style="margin-top: 0.5rem;">
+                     <button id="download-current-csv" class="btn">현재 명단 저장</button>
                 </div>
                  <div id="student-form">
                     <input type="number" id="student-number" placeholder="번호 (자동 부여)">
@@ -427,9 +434,9 @@
             let currentLayout = { cols: 5, isPair: false };
 
             // --- DOM Elements ---
-            const downloadCsvBtn = document.getElementById('download-csv');
             const uploadCsvBtn = document.getElementById('upload-csv');
             const csvFileInput = document.getElementById('csv-file-input');
+            const downloadCurrentCsvBtn = document.getElementById('download-current-csv');
             const studentNumberInput = document.getElementById('student-number');
             const studentNameInput = document.getElementById('student-name');
             const addStudentBtn = document.getElementById('add-student');
@@ -527,9 +534,9 @@
                 }
             }
             
-            function downloadCsv() {
+            function downloadCurrentCsv() {
                 if (students.length === 0) {
-                    alert('내려받을 학생 명단이 없습니다. 견본으로 사용하시려면 최소 1명 이상의 학생을 추가해주세요.');
+                    alert('저장할 학생 명단이 없습니다.');
                     return;
                 }
                 const header = ['번호', '이름', '성별'];
@@ -540,7 +547,7 @@
                 const link = document.createElement("a");
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
-                link.setAttribute("download", "학생좌석배치_견본.csv");
+                link.setAttribute("download", "현재_학생명단.csv");
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
@@ -913,7 +920,7 @@
             });
             uploadCsvBtn.addEventListener('click', () => csvFileInput.click());
             csvFileInput.addEventListener('change', handleCsvUpload);
-            downloadCsvBtn.addEventListener('click', downloadCsv);
+            downloadCurrentCsvBtn.addEventListener('click', downloadCurrentCsv);
             
             applyLayoutBtn.addEventListener('click', handleLayoutApply);
             pairModeCheckbox.addEventListener('change', updateLayoutColsLabel);
