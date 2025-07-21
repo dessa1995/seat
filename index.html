@@ -137,6 +137,12 @@
             margin-top: 1rem;
         }
         
+        .help-text {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+        
         /* --- Custom Layout Controls --- */
         .layout-controls {
             display: flex;
@@ -376,10 +382,11 @@
             <section>
                 <h2>학생 명렬</h2>
                 <div class="btn-group">
-                    <a href="https://docs.google.com/spreadsheets/d/1PjoxX3O7A6bYIoSbf361v7kewYqXoc1F/export?format=csv" download="학생명단_양식.csv" class="btn">명단 양식 내려받기</a>
+                    <a href="https://drive.google.com/uc?export=download&id=14U3BCnAlipCbsPWru9v-FhlXM8fQC_w7" download="학생명단_양식.csv" class="btn">명단 양식 내려받기</a>
                     <button id="upload-csv" class="btn">명단 업로드 (PC)</button>
                     <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
                 </div>
+                 <p class="help-text">※ 파일이 깨지면, 엑셀에서 '다른 이름으로 저장' > 파일 형식을 'CSV UTF-8'로 선택 후 저장하여 업로드해주세요.</p>
                 <div class="btn-group" style="margin-top: 0.5rem;">
                      <button id="download-current-csv" class="btn">현재 명단 저장</button>
                 </div>
@@ -545,14 +552,18 @@
                 const file = event.target.files[0];
                 if (!file) return;
 
-                Papa.parse(file, {
-                    complete: (results) => {
-                        processCsvData(results.data);
-                    },
-                    header: false,
-                    skipEmptyLines: true,
-                    encoding: "UTF-8"
-                });
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const text = e.target.result;
+                    Papa.parse(text, {
+                        complete: (results) => {
+                            processCsvData(results.data);
+                        },
+                        header: false,
+                        skipEmptyLines: true
+                    });
+                };
+                reader.readAsText(file, "EUC-KR"); // Try reading as EUC-KR first
             }
 
             function normalizeGender(genderStr) {
