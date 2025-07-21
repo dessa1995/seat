@@ -474,7 +474,6 @@
                 const number = parseInt(studentNumberInput.value);
                 const gender = document.querySelector('input[name="gender"]:checked').value;
 
-                // Check for duplicate number when adding a new student or changing number
                 if (students.some(s => s.number === number && s.id !== editingStudentId)) {
                     alert('이미 사용 중인 번호입니다.');
                     return;
@@ -493,7 +492,7 @@
                 }
 
                 students.sort((a, b) => a.number - b.number);
-                cancelEdit(); // Reset form
+                cancelEdit();
                 updateStudentList();
                 updateNextStudentNumber();
             }
@@ -514,6 +513,7 @@
                 editingStudentId = null;
                 studentNumberInput.value = '';
                 studentNameInput.value = '';
+                document.querySelector('input[name="gender"][value="M"]').checked = true;
                 addStudentBtn.textContent = '학생 추가';
             }
 
@@ -534,7 +534,7 @@
                 }
             }
             
-            // --- CSV and Google Sheet Functions ---
+            // --- CSV Functions ---
             function handleCsvUpload(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -550,22 +550,21 @@
             }
 
             function normalizeGender(genderStr) {
-                if (!genderStr) return 'M'; // Default
+                if (!genderStr) return 'M';
                 const maleKeywords = ['남', '남자', '남성', '남학생', 'm', 'male', 'man'];
                 const femaleKeywords = ['여', '여자', '여성', '녀', '여학생', 'f', 'female', 'woman', 'w'];
                 const lowerGender = genderStr.trim().toLowerCase();
 
                 if (maleKeywords.includes(lowerGender)) return 'M';
                 if (femaleKeywords.includes(lowerGender)) return 'F';
-                return 'M'; // Default if no match
+                return 'M';
             }
 
             function processCsvData(data) {
                 const tempStudents = [];
-                // Start from row 1 to skip header
                 for (let i = 1; i < data.length; i++) {
                     const row = data[i];
-                    if (row.length < 2 || !row[1]) continue; // Must have at least a name
+                    if (row.length < 2 || !row[1]) continue;
                     
                     tempStudents.push({
                         rawNumber: row[0] || '',
@@ -574,11 +573,9 @@
                     });
                 }
                 
-                // Assign numbers
                 let maxNum = 0;
-                students = []; // Clear existing students
+                students = [];
                 
-                // First pass for students with numbers
                 tempStudents.forEach(s => {
                     const num = parseInt(s.rawNumber, 10);
                     if (!isNaN(num)) {
@@ -587,11 +584,13 @@
                     }
                 });
                 
-                // Second pass for students without numbers
                 tempStudents.forEach(s => {
                     const num = parseInt(s.rawNumber, 10);
                     if (isNaN(num)) {
                         maxNum++;
+                        while(students.some(s => s.number === maxNum)) {
+                            maxNum++;
+                        }
                         students.push({ id: Date.now() + Math.random(), number: maxNum, name: s.name, gender: s.gender });
                     }
                 });
@@ -665,7 +664,6 @@
                 if (students.length === 0) {
                     seatingChartDiv.innerHTML = '';
                     desks = [];
-                    alert('학생 명단이 비어있습니다. 학생을 추가하거나 명단을 업로드해주세요.');
                     return;
                 }
                 currentLayout = { cols, isPair };
@@ -693,7 +691,7 @@
                 const hGap = 20;
                 const vGap = 40;
                 const pairGap = 10;
-                const teacherDeskOffset = 100; // Distance for teacher's desk
+                const teacherDeskOffset = 100;
 
                 let maxW = 0;
                 let maxH = 0;
@@ -735,7 +733,6 @@
                 seatingChartDiv.style.height = `${maxH}px`;
                 seatingChartDiv.style.transform = `scale(${scale})`;
 
-                // Centering logic
                 const scaledWidth = maxW * scale;
                 const scaledHeight = maxH * scale;
 
@@ -836,15 +833,6 @@
             }
 
             // --- Drag and Drop with Collision Detection ---
-            function isColliding(rect1, rect2) {
-                return !(
-                    rect1.right < rect2.left ||
-                    rect1.left > rect2.right ||
-                    rect1.bottom < rect2.top ||
-                    rect1.top > rect2.bottom
-                );
-            }
-
             function makeDraggable(element) {
                 element.onmousedown = e => {
                     e.preventDefault();
@@ -865,19 +853,8 @@
                         const dx = (e_drag.clientX - startX) / scale;
                         const dy = (e_drag.clientY - startY) / scale;
                         
-                        const newLeft = startLeft + dx;
-                        const newTop = startTop + dy;
-                        
-                        element.style.left = `${newLeft}px`;
-                        element.style.top = `${newTop}px`;
-                        
-                        // Simple boundary check
-                        const parentRect = seatingChartDiv.getBoundingClientRect();
-                        const elemRect = element.getBoundingClientRect();
-                        if (elemRect.left < parentRect.left || elemRect.right > parentRect.right || elemRect.top < parentRect.top || elemRect.bottom > parentRect.bottom) {
-                            element.style.left = `${startLeft + dx - (dx/10)}px`; // Revert slightly
-                            element.style.top = `${startTop + dy - (dy/10)}px`;
-                        }
+                        element.style.left = `${startLeft + dx}px`;
+                        element.style.top = `${startTop + dy}px`;
                     };
 
                     document.onmouseup = () => {
@@ -970,7 +947,6 @@
             
             function toggleFullscreen() {
                 document.body.classList.toggle('fullscreen-mode');
-                // Allow time for CSS transition before recalculating layout
                 setTimeout(arrangeAndScaleDesks, 50);
             }
 
