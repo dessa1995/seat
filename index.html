@@ -36,6 +36,8 @@
             gap: 1rem;
             -webkit-font-smoothing: none;
             -moz-osx-font-smoothing: grayscale;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: pixelated;
             height: 100vh;
             box-sizing: border-box;
         }
@@ -852,39 +854,29 @@
                     element.classList.add('dragging');
 
                     const scale = parseFloat(seatingChartDiv.style.transform.replace('scale(', '')) || 1;
-                    let pos1 = 0, pos2 = 0, pos3 = e.clientX, pos4 = e.clientY;
+                    const startLeft = element.offsetLeft;
+                    const startTop = element.offsetTop;
+                    const startX = e.clientX;
+                    const startY = e.clientY;
 
                     document.onmousemove = e_drag => {
                         e_drag.preventDefault();
                         
-                        const oldLeft = element.offsetLeft;
-                        const oldTop = element.offsetTop;
-
-                        pos1 = (pos3 - e_drag.clientX) / scale;
-                        pos2 = (pos4 - e_drag.clientY) / scale;
-                        pos3 = e_drag.clientX;
-                        pos4 = e_drag.clientY;
+                        const dx = (e_drag.clientX - startX) / scale;
+                        const dy = (e_drag.clientY - startY) / scale;
                         
-                        let newLeft = element.offsetLeft - pos1;
-                        let newTop = element.offsetTop - pos2;
-
+                        const newLeft = startLeft + dx;
+                        const newTop = startTop + dy;
+                        
                         element.style.left = `${newLeft}px`;
                         element.style.top = `${newTop}px`;
                         
-                        const draggedRect = element.getBoundingClientRect();
-                        let collision = false;
-
-                        const otherDesks = desks.map(d => d.element).filter(d => d !== element);
-                        for (const otherDesk of otherDesks) {
-                            if (isColliding(draggedRect, otherDesk.getBoundingClientRect())) {
-                                collision = true;
-                                break;
-                            }
-                        }
-
-                        if (collision) {
-                            element.style.left = `${oldLeft}px`;
-                            element.style.top = `${oldTop}px`;
+                        // Simple boundary check
+                        const parentRect = seatingChartDiv.getBoundingClientRect();
+                        const elemRect = element.getBoundingClientRect();
+                        if (elemRect.left < parentRect.left || elemRect.right > parentRect.right || elemRect.top < parentRect.top || elemRect.bottom > parentRect.bottom) {
+                            element.style.left = `${startLeft + dx - (dx/10)}px`; // Revert slightly
+                            element.style.top = `${startTop + dy - (dy/10)}px`;
                         }
                     };
 
