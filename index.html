@@ -845,26 +845,26 @@
                     
                     let cardWidth = 0;
                     let cardHeight = 0;
+                    const margin = 10;
 
                     desksInGroup.forEach((deskData, j) => {
                         const deskElement = deskData.element;
                         const deskWidth = 100;
                         const deskHeight = 60;
-                        const margin = 10;
                         
                         let x = (j % 2) * (deskWidth + margin);
                         let y = Math.floor(j / 2) * (deskHeight + margin);
                         
-                        deskElement.style.left = `${x}px`;
-                        deskElement.style.top = `${y}px`;
+                        deskElement.style.left = `${x + margin}px`;
+                        deskElement.style.top = `${y + margin}px`;
                         groupCard.appendChild(deskElement);
 
                         cardWidth = Math.max(cardWidth, x + deskWidth);
                         cardHeight = Math.max(cardHeight, y + deskHeight);
                     });
                     
-                    groupCard.style.width = `${cardWidth}px`;
-                    groupCard.style.height = `${cardHeight}px`;
+                    groupCard.style.width = `${cardWidth + (margin*2)}px`;
+                    groupCard.style.height = `${cardHeight + (margin*2)}px`;
                     seatingChartDiv.appendChild(groupCard);
                 }
             }
@@ -915,7 +915,7 @@
                 if (currentLayout.mode === 'group') {
                     arrangeInGroups();
                     const groupCards = Array.from(seatingChartDiv.children);
-                    const groupsPerRow = Math.max(1, Math.floor(seatingChartArea.clientWidth / 350));
+                    const groupsPerRow = Math.max(1, Math.floor((seatingChartArea.clientWidth - 20) / 350));
                     const groupGap = 30;
                     
                     let currentX = 0;
@@ -1146,7 +1146,6 @@
             function loadPreset() {
                 const presetJSON = localStorage.getItem('seatingChartPreset');
                 if (!presetJSON) {
-                    alert('저장된 배치 정보가 없습니다.');
                     return;
                 }
                 const preset = JSON.parse(presetJSON);
@@ -1179,13 +1178,26 @@
                     deskData.element.style.top = p.top;
                     deskData.element.style.transform = `rotate(${deskData.rotation}deg)`;
                 });
+                
+                if (areDesksHidden) {
+                    desks.forEach(d => d.element.classList.add('hidden'));
+                }
+
                 arrangeAndScaleDesks();
-                alert('저장된 배치를 불러왔습니다.');
             }
 
             function exportToPDF() {
                 const chartArea = document.getElementById('seating-chart-area');
+                
+                // --- Modifications for PDF export ---
+                const deskHeaders = chartArea.querySelectorAll('.desk-header');
+                deskHeaders.forEach(header => header.style.display = 'none');
+
+                const fixedDesks = chartArea.querySelectorAll('.desk.fixed');
+                fixedDesks.forEach(desk => desk.classList.remove('fixed'));
+
                 alert('PDF 생성을 시작합니다. 잠시만 기다려주세요...');
+
                 html2canvas(chartArea, { scale: 2 }).then(canvas => {
                     const imgData = canvas.toDataURL('image/png');
                     const { jsPDF } = window.jspdf;
@@ -1199,6 +1211,10 @@
                 }).catch(err => {
                     console.error("PDF 생성 오류:", err);
                     alert("PDF 생성에 실패했습니다. 콘솔을 확인해주세요.");
+                }).finally(() => {
+                    // --- Restore original appearance after PDF generation ---
+                    deskHeaders.forEach(header => header.style.display = 'flex');
+                    fixedDesks.forEach(desk => desk.classList.add('fixed'));
                 });
             }
             
