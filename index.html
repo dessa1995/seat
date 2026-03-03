@@ -26,6 +26,7 @@
             --accent-color: #ff6347;
             --text-color: #333;
             --guide-line-color: #2196F3;
+            --move-all-color: #9c27b0;
         }
 
         body {
@@ -72,7 +73,7 @@
 
         .controls {
             flex: 1;
-            min-width: 300px;
+            min-width: 320px;
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
@@ -195,6 +196,7 @@
             border-radius: 50%;
         }
         input:checked + .slider { background-color: var(--guide-line-color); }
+        #move-all-toggle:checked + .slider { background-color: var(--move-all-color); }
         input:checked + .slider:before { transform: translateX(18px); }
 
         /* 배정 방향 선택 버튼 스타일 */
@@ -450,13 +452,24 @@
                 <h3>자리 바꾸기 & 정돈</h3>
                 <div class="btn-group">
                     <button id="shuffle-seats" class="btn" style="background-color: #ffeb3b;">섞기 (랜덤 배정)</button>
-                    <button id="align-all-btn" class="btn" style="background-color: #8bc34a; color: white;">책상 줄 맞추기 (전체 정렬)</button>
+                    <button id="center-align-btn" class="btn" style="background-color: #2196f3; color: white;">전체 가운데 정렬</button>
+                    <button id="align-all-btn" class="btn" style="background-color: #8bc34a; color: white;">책상 줄 맞추기 (격자)</button>
+                </div>
+                <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+                    <label for="move-all-toggle" style="font-weight: bold; font-size: 0.9rem;">모든 책상 함께 이동</label>
+                    <label class="switch">
+                        <input type="checkbox" id="move-all-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="font-size: 0.8rem; color: #666;">(또는 Shift+드래그)</span>
+                </div>
+                <div class="btn-group" style="margin-top: 10px;">
                     <button id="toggle-hide" class="btn">책상 가리기</button>
                     <button id="fullscreen-btn" class="btn">전체 화면</button>
                     <button id="save-preset" class="btn">현재 상태 저장</button>
                     <button id="export-pdf" class="btn">PDF 저장</button>
                 </div>
-                <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">* 책상을 드래그하여 옮길 수 있습니다. 줄 맞춤 가이드가 표시됩니다.</p>
+                <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">* 책상을 드래그하여 옮길 수 있습니다. 줄 맞춤 가이드가 표시됩니다.</p>
             </section>
         </div>
 
@@ -470,7 +483,7 @@
 
             <div id="fullscreen-controls">
                 <button id="fs-shuffle-btn" class="btn">랜덤 섞기</button>
-                <button id="fs-align-btn" class="btn">전체 정렬</button>
+                <button id="fs-align-btn" class="btn">격자 정렬</button>
                 <button id="fs-toggle-hide-btn" class="btn">가리기/보이기</button>
                 <button id="exit-fullscreen-btn" class="btn">나가기</button>
             </div>
@@ -508,7 +521,7 @@
             // --- Constants ---
             const DESK_WIDTH = 100;
             const DESK_HEIGHT = 60;
-            const GRID_SIZE = 10; // 정렬 시 기준이 되는 눈금 크기를 더 세밀하게 조정
+            const GRID_SIZE = 10;
 
             // --- DOM Elements ---
             const uploadBtn = document.getElementById('upload-file');
@@ -522,8 +535,10 @@
             const seatingChartArea = document.getElementById('seating-chart-area');
             const seatingChartDiv = document.getElementById('seating-chart');
             const shuffleBtn = document.getElementById('shuffle-seats');
+            const centerAlignBtn = document.getElementById('center-align-btn');
             const alignAllBtn = document.getElementById('align-all-btn');
             const toggleHideBtn = document.getElementById('toggle-hide');
+            const moveAllToggle = document.getElementById('move-all-toggle');
             const savePresetBtn = document.getElementById('save-preset');
             const exportPdfBtn = document.getElementById('export-pdf');
             const pairModeCheckbox = document.getElementById('pair-mode');
@@ -753,6 +768,32 @@
             }
 
             // --- Core Functions ---
+            
+            // 전체 가운데 정렬
+            function centerAlignAll() {
+                if (desks.length === 0) return;
+                
+                // 현재 책상들의 영역 계산
+                let minX = Infinity;
+                let maxX = -Infinity;
+                
+                desks.forEach(d => {
+                    const left = parseFloat(d.element.style.left);
+                    minX = Math.min(minX, left);
+                    maxX = Math.max(maxX, left + DESK_WIDTH);
+                });
+                
+                const currentCenter = (minX + maxX) / 2;
+                const containerWidth = seatingChartDiv.offsetWidth;
+                const targetCenter = containerWidth / 2;
+                const offset = targetCenter - currentCenter;
+                
+                desks.forEach(d => {
+                    const left = parseFloat(d.element.style.left);
+                    d.element.style.left = (left + offset) + 'px';
+                });
+            }
+
             function alignAllDesks() {
                 if (desks.length === 0) return;
                 desks.forEach(deskData => {
@@ -807,7 +848,7 @@
                 toggleHideBtn.textContent = areDesksHidden ? '전체 공개' : '책상 가리기';
             }
 
-            // --- Drag and Drop Logic (Improved Smoothness) ---
+            // --- Drag and Drop Logic ---
             function makeDraggable(element) {
                 element.onmousedown = e => {
                     if (e.target.classList.contains('desk-btn')) return;
@@ -819,70 +860,83 @@
                     seatingChartArea.classList.add('show-grid');
 
                     const scale = parseFloat(seatingChartDiv.style.transform.replace('scale(', '')) || 1;
-                    const startLeft = element.offsetLeft;
-                    const startTop = element.offsetTop;
                     const startX = e.clientX;
                     const startY = e.clientY;
 
+                    // 그룹 이동 여부 확인
+                    const isGroupMove = moveAllToggle.checked || e.shiftKey;
+                    
+                    // 시작 위치 저장
+                    const initialPositions = desks.map(d => ({
+                        el: d.element,
+                        left: d.element.offsetLeft,
+                        top: d.element.offsetTop,
+                        isTarget: d.element === element
+                    }));
+
                     document.onmousemove = e_drag => {
-                        // 델타값을 스케일에 맞춰 정확하게 계산하여 부드러운 이동 보장
                         const dx = (e_drag.clientX - startX) / scale;
                         const dy = (e_drag.clientY - startY) / scale;
                         
-                        let currentLeft = startLeft + dx;
-                        let currentTop = startTop + dy;
+                        if (isGroupMove) {
+                            // 모든 책상 일괄 이동
+                            initialPositions.forEach(pos => {
+                                pos.el.style.left = (pos.left + dx) + 'px';
+                                pos.el.style.top = (pos.top + dy) + 'px';
+                            });
+                        } else {
+                            // 개별 이동 및 정렬 가이드
+                            let currentLeft = initialPositions.find(p => p.isTarget).left + dx;
+                            let currentTop = initialPositions.find(p => p.isTarget).top + dy;
 
-                        // 스냅 강도 조절 (임계값을 낮추어 더 섬세한 조작 가능하게 함)
-                        let showV = false, showH = false;
-                        let guideX = 0, guideY = 0;
-                        const snapThreshold = 6; // 자석 효과 범위를 10에서 6으로 낮춤
+                            let showV = false, showH = false;
+                            let guideX = 0, guideY = 0;
+                            const snapThreshold = 6;
 
-                        desks.forEach(other => {
-                            if (other.element === element) return;
-                            const o = other.element;
-                            
-                            // 세로 가이드 정렬 체크
-                            const cxPoints = [o.offsetLeft, o.offsetLeft + DESK_WIDTH/2, o.offsetLeft + DESK_WIDTH];
-                            const mxPoints = [currentLeft, currentLeft + DESK_WIDTH/2, currentLeft + DESK_WIDTH];
-                            
-                            cxPoints.forEach(cx => {
-                                mxPoints.forEach((mx, mi) => {
-                                    if (Math.abs(cx - mx) < snapThreshold) {
-                                        currentLeft -= (mx - cx);
-                                        guideX = cx;
-                                        showV = true;
-                                    }
+                            desks.forEach(other => {
+                                if (other.element === element) return;
+                                const o = other.element;
+                                
+                                const cxPoints = [o.offsetLeft, o.offsetLeft + DESK_WIDTH/2, o.offsetLeft + DESK_WIDTH];
+                                const mxPoints = [currentLeft, currentLeft + DESK_WIDTH/2, currentLeft + DESK_WIDTH];
+                                
+                                cxPoints.forEach(cx => {
+                                    mxPoints.forEach((mx) => {
+                                        if (Math.abs(cx - mx) < snapThreshold) {
+                                            currentLeft -= (mx - cx);
+                                            guideX = cx;
+                                            showV = true;
+                                        }
+                                    });
+                                });
+
+                                const cyPoints = [o.offsetTop, o.offsetTop + DESK_HEIGHT/2, o.offsetTop + DESK_HEIGHT];
+                                const myPoints = [currentTop, currentTop + DESK_HEIGHT/2, currentTop + DESK_HEIGHT];
+                                
+                                cyPoints.forEach(cy => {
+                                    myPoints.forEach((my) => {
+                                        if (Math.abs(cy - my) < snapThreshold) {
+                                            currentTop -= (my - cy);
+                                            guideY = cy;
+                                            showH = true;
+                                        }
+                                    });
                                 });
                             });
 
-                            // 가로 가이드 정렬 체크
-                            const cyPoints = [o.offsetTop, o.offsetTop + DESK_HEIGHT/2, o.offsetTop + DESK_HEIGHT];
-                            const myPoints = [currentTop, currentTop + DESK_HEIGHT/2, currentTop + DESK_HEIGHT];
-                            
-                            cyPoints.forEach(cy => {
-                                myPoints.forEach((my, mi) => {
-                                    if (Math.abs(cy - my) < snapThreshold) {
-                                        currentTop -= (my - cy);
-                                        guideY = cy;
-                                        showH = true;
-                                    }
-                                });
-                            });
-                        });
+                            element.style.left = `${currentLeft}px`;
+                            element.style.top = `${currentTop}px`;
 
-                        element.style.left = `${currentLeft}px`;
-                        element.style.top = `${currentTop}px`;
+                            if (showV) {
+                                guideV.style.display = 'block';
+                                guideV.style.left = (guideX * scale) + seatingChartDiv.offsetLeft + 'px';
+                            } else guideV.style.display = 'none';
 
-                        // 가이드 라인 렌더링
-                        if (showV) {
-                            guideV.style.display = 'block';
-                            guideV.style.left = (guideX * scale) + seatingChartDiv.offsetLeft + 'px';
-                        } else guideV.style.display = 'none';
-
-                        if (showH) {
-                            guideH.style.display = 'block';
-                            guideH.style.top = (guideY * scale) + seatingChartDiv.offsetTop + 'px';
-                        } else guideH.style.display = 'none';
+                            if (showH) {
+                                guideH.style.display = 'block';
+                                guideH.style.top = (guideY * scale) + seatingChartDiv.offsetTop + 'px';
+                            } else guideH.style.display = 'none';
+                        }
                     };
 
                     document.onmouseup = () => {
@@ -962,6 +1016,7 @@
 
             applyLayoutBtn.addEventListener('click', handleLayoutApply);
             shuffleBtn.addEventListener('click', shuffleSeats);
+            centerAlignBtn.addEventListener('click', centerAlignAll);
             alignAllBtn.addEventListener('click', alignAllDesks);
             toggleHideBtn.addEventListener('click', toggleHideAll);
             
