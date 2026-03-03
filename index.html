@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>자리 배치 프로그램</title>
+    <title>자리 배치 프로그램 - 기능 강화판</title>
     <!-- jsPDF and html2canvas for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -25,6 +25,7 @@
             --button-hover-bg: #c0c0c0;
             --accent-color: #ff6347;
             --text-color: #333;
+            --guide-line-color: #2196F3;
         }
 
         body {
@@ -75,25 +76,33 @@
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
+            overflow-y: auto;
         }
 
         .seating-chart-container {
             flex: 3;
             min-width: 400px;
             position: relative;
-            overflow: hidden; /* Important for scaling */
+            overflow: hidden; 
+            background-color: #fff;
+        }
+
+        /* 드래그 시 눈금 배경 */
+        .seating-chart-container.show-grid {
+            background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
+            background-size: 20px 20px;
         }
 
         /* --- Buttons and Inputs --- */
         .btn, a.btn {
             font-family: 'Noto Sans KR', sans-serif;
-            font-size: 1rem;
-            padding: 0.75rem 1rem;
-            border: 4px solid var(--border-color);
+            font-size: 0.9rem;
+            padding: 0.6rem 0.8rem;
+            border: 3px solid var(--border-color);
             background-color: var(--button-bg);
             cursor: pointer;
             transition: background-color 0.2s, box-shadow 0.2s, transform 0.2s;
-            box-shadow: 4px 4px 0px 0px var(--border-color);
+            box-shadow: 3px 3px 0px 0px var(--border-color);
             text-decoration: none;
             color: var(--text-color);
             display: inline-block;
@@ -103,35 +112,32 @@
 
         .btn:hover, .btn:focus, a.btn:hover, a.btn:focus {
             background-color: var(--button-hover-bg);
-            box-shadow: 2px 2px 0px 0px var(--border-color);
-            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px 0px var(--border-color);
+            transform: translate(1px, 1px);
         }
         
         .btn:active, a.btn:active {
             box-shadow: 0px 0px 0px 0px var(--border-color);
-            transform: translate(4px, 4px);
+            transform: translate(3px, 3px);
         }
 
         .btn-group {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
+            gap: 0.4rem;
         }
         
         #delete-all-students {
             background-color: var(--accent-color);
             color: white;
         }
-        #delete-all-students:hover {
-            background-color: #e55337;
-        }
 
         input[type="text"], input[type="number"] {
             font-family: 'Noto Sans KR', sans-serif;
             font-size: 1rem;
-            padding: 0.5rem;
-            border: 4px solid var(--border-color);
-            width: calc(100% - 1.5rem);
+            padding: 0.4rem;
+            border: 3px solid var(--border-color);
+            width: calc(100% - 1.2rem);
             border-radius: 4px;
         }
         
@@ -147,12 +153,6 @@
             margin-top: 1rem;
         }
         
-        .help-text {
-            font-size: 0.8rem;
-            color: #666;
-            margin-top: 0.5rem;
-        }
-        
         /* --- Custom Layout Controls --- */
         .layout-controls {
             display: flex;
@@ -165,81 +165,86 @@
             gap: 10px;
         }
         #layout-cols, #group-size {
-            width: 80px;
+            width: 60px;
         }
         .switch {
             position: relative;
             display: inline-block;
-            width: 50px;
-            height: 28px;
+            width: 44px;
+            height: 24px;
         }
         .switch input { display:none; }
         .slider {
             position: absolute;
             cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background-color: #ccc;
             border: 2px solid var(--border-color);
             transition: .4s;
-            border-radius: 28px;
+            border-radius: 24px;
         }
         .slider:before {
             position: absolute;
             content: "";
-            height: 16px;
-            width: 16px;
-            left: 4px;
-            bottom: 4px;
+            height: 14px;
+            width: 14px;
+            left: 3px; bottom: 3px;
             background-color: white;
             border: 2px solid var(--border-color);
             transition: .4s;
             border-radius: 50%;
         }
-        input:checked + .slider {
-            background-color: var(--accent-color);
-        }
-        input:checked + .slider:before {
-            transform: translateX(20px);
-        }
+        input:checked + .slider { background-color: var(--guide-line-color); }
+        input:checked + .slider:before { transform: translateX(18px); }
 
+        /* 배정 방향 선택 버튼 스타일 */
+        .direction-btn-group {
+            display: flex;
+            border: 3px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+            width: fit-content;
+        }
+        .direction-btn {
+            padding: 5px 12px;
+            cursor: pointer;
+            background: #eee;
+            border: none;
+            font-weight: bold;
+        }
+        .direction-btn.active {
+            background: var(--guide-line-color);
+            color: white;
+        }
 
         /* --- Student List --- */
         #student-list {
             list-style-type: none;
             padding: 0;
             margin: 0;
-            max-height: 200px;
+            max-height: 180px;
             overflow-y: auto;
-            border: 4px solid var(--border-color);
+            border: 3px solid var(--border-color);
             margin-top: 1rem;
             border-radius: 4px;
         }
 
         #student-list li {
-            padding: 0.5rem;
+            padding: 0.4rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
             background-color: #fff;
             gap: 0.5rem;
+            font-size: 0.9rem;
         }
-        #student-list li:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-        .list-btn-group {
-            display: flex;
-            gap: 0.5rem;
-        }
+        #student-list li:nth-child(even) { background-color: #f2f2f2; }
+        .list-btn-group { display: flex; gap: 0.3rem; }
         .btn-edit, .btn-remove {
              background: var(--button-bg);
              border: 2px solid var(--border-color);
-             font-family: 'Noto Sans KR', sans-serif;
              cursor: pointer;
-             font-weight: bold;
-             padding: 2px 5px;
+             padding: 1px 4px;
              border-radius: 4px;
         }
 
@@ -249,42 +254,36 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            width: 150px;
-            height: 50px;
+            width: 140px;
+            height: 45px;
             background-color: #e6e6e6;
             border: 4px solid var(--border-color);
             box-shadow: 4px 4px 0px 0px var(--border-color);
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.2rem;
-            z-index: 10;
+            font-size: 1.1rem;
+            z-index: 100;
             border-radius: 8px;
         }
         
         #seating-chart {
             position: absolute;
-            transform-origin: top left; /* Important for scaling */
+            transform-origin: top left;
             transition: transform 0.3s ease-in-out, top 0.3s ease-in-out, left 0.3s ease-in-out;
         }
         
-        .group-card {
+        /* 가이드 라인 */
+        .guide-line {
             position: absolute;
-            background-color: #f9f9f9;
-            border: 3px dashed var(--border-color);
-            border-radius: 8px;
-            padding-top: 2.5rem;
+            background-color: var(--guide-line-color);
+            z-index: 99;
+            display: none;
+            pointer-events: none;
+            opacity: 0.6;
         }
-        .group-title {
-            position: absolute;
-            top: 0.5rem;
-            left: 50%;
-            transform: translateX(-50%);
-            font-weight: bold;
-            font-size: 1.1rem;
-            background: white;
-            padding: 0 0.5rem;
-        }
+        .guide-line.v { width: 1.5px; height: 10000px; top: -5000px; }
+        .guide-line.h { height: 1.5px; width: 10000px; left: -5000px; }
 
         .desk {
             position: absolute;
@@ -299,12 +298,16 @@
             align-items: center;
             cursor: grab;
             user-select: none;
-            transition: background-color 0.3s, transform 0.3s;
-            z-index: 1;
+            z-index: 10;
             border-radius: 8px;
+            box-sizing: border-box;
         }
         .desk.dragging {
             z-index: 1000;
+            cursor: grabbing;
+            opacity: 0.9;
+            box-shadow: 8px 8px 15px rgba(0,0,0,0.15);
+            transition: none !important; /* 드래그 시 딜레이 제거 */
         }
 
         .desk.fixed {
@@ -312,13 +315,8 @@
             cursor: default;
         }
         
-        .desk.hidden .student-info {
-            visibility: hidden;
-        }
-        
-        .desk.hidden {
-            background-color: var(--desk-hidden-bg);
-        }
+        .desk.hidden .student-info { visibility: hidden; }
+        .desk.hidden { background-color: var(--desk-hidden-bg); }
 
         .desk-header {
             position: absolute;
@@ -329,28 +327,22 @@
         }
 
         .desk-btn {
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             padding: 1px 3px;
-            border: 2px solid var(--border-color);
+            border: 1.5px solid var(--border-color);
             background-color: var(--button-bg);
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 3px;
         }
         
         .student-info {
             text-align: center;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             line-height: 1.2;
         }
         
-        .student-name {
-            font-weight: bold;
-        }
-
-        .student-gender {
-            font-size: 0.8rem;
-            color: #555;
-        }
+        .student-name { font-weight: bold; }
+        .student-gender { font-size: 0.75rem; color: #555; }
 
         /* --- Fullscreen Mode --- */
         #fullscreen-controls {
@@ -360,75 +352,36 @@
             left: 50%;
             transform: translateX(-50%);
             z-index: 2020;
-            background-color: rgba(255, 255, 255, 0.8);
+            background-color: rgba(255, 255, 255, 0.9);
             padding: 1rem;
             border-radius: 8px;
             border: 4px solid var(--border-color);
             box-shadow: 4px 4px 0px 0px var(--border-color);
         }
-        body.fullscreen-mode #fullscreen-controls {
-            display: flex;
-            gap: 1rem;
-        }
-        body.fullscreen-mode .controls, body.fullscreen-mode h1 {
-            display: none;
-        }
+        body.fullscreen-mode #fullscreen-controls { display: flex; gap: 0.5rem; }
+        body.fullscreen-mode .controls, body.fullscreen-mode h1 { display: none; }
         body.fullscreen-mode .seating-chart-container {
-            width: 100vw;
-            height: 100vh;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 2000;
-            margin: 0;
-            padding: 1rem;
-            box-sizing: border-box;
-            border: none;
-            box-shadow: none;
+            width: 100vw; height: 100vh; position: fixed;
+            top: 0; left: 0; z-index: 2000; padding: 1rem;
+            box-sizing: border-box; border: none; box-shadow: none;
         }
         
         /* --- Modal --- */
         #confirm-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 3000;
-            display: none; /* Hidden by default */
-            justify-content: center;
-            align-items: center;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5); z-index: 3000;
+            display: none; justify-content: center; align-items: center;
         }
         #confirm-modal {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            border: 4px solid var(--border-color);
-            box-shadow: 4px 4px 0px 0px var(--border-color);
+            background: white; padding: 2rem; border-radius: 8px;
+            border: 4px solid var(--border-color); box-shadow: 4px 4px 0px 0px var(--border-color);
             text-align: center;
         }
-        #confirm-modal p {
-            font-size: 1.2rem;
-            margin: 0 0 1.5rem 0;
-        }
-        #confirm-modal .btn-group {
-            justify-content: center;
-        }
 
-
-        /* --- Responsive Design --- */
         @media (max-width: 768px) {
-            body {
-                height: auto;
-            }
-            .app-container {
-                flex-direction: column;
-            }
-            .controls, .seating-chart-container {
-                width: 100%;
-                min-height: 500px;
-            }
+            body { height: auto; }
+            .app-container { flex-direction: column; }
+            .controls, .seating-chart-container { width: 100%; min-height: 500px; }
         }
     </style>
 </head>
@@ -445,11 +398,11 @@
                 <div class="btn-group">
                     <a href="https://drive.google.com/uc?export=download&id=14U3BCnAlipCbsPWru9v-FhlXM8fQC_w7" download="학생명단_양식.xlsx" class="btn">명단 양식 내려받기</a>
                     <button id="upload-file" class="btn">명단 업로드 (PC)</button>
-                    <input type="file" id="file-input" accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display: none;">
+                    <input type="file" id="file-input" accept=".csv, .xlsx" style="display: none;">
                 </div>
                 <div class="btn-group" style="margin-top: 0.5rem;">
-                     <button id="download-current-csv" class="btn">현재 명단 저장</button>
-                     <button id="delete-all-students" class="btn">명단 전체 삭제</button>
+                    <button id="download-current-csv" class="btn">현재 명단 저장</button>
+                    <button id="delete-all-students" class="btn">전체 삭제</button>
                 </div>
                  <div id="student-form">
                     <input type="number" id="student-number" placeholder="번호 (자동 부여)">
@@ -458,15 +411,22 @@
                         <label><input type="radio" name="gender" value="M" checked> 남</label>
                         <label><input type="radio" name="gender" value="F"> 여</label>
                     </div>
-                    <button id="add-student-btn" class="btn">학생 추가</button>
+                    <button id="add-student-btn" class="btn">학생 추가/수정</button>
                 </div>
                 <ul id="student-list"></ul>
             </section>
 
             <!-- Layout Selection -->
             <section>
-                <h3>책상 배치 유형</h3>
+                <h3>책상 배치 설정</h3>
                 <div class="layout-controls">
+                    <div>
+                        <label>배정 방향:</label>
+                        <div class="direction-btn-group">
+                            <button class="direction-btn active" data-dir="horizontal">가로 우선</button>
+                            <button class="direction-btn" data-dir="vertical">세로 우선</button>
+                        </div>
+                    </div>
                     <div id="standard-layout-controls">
                         <div>
                             <label for="pair-mode">짝꿍 모드</label>
@@ -476,52 +436,42 @@
                             </label>
                         </div>
                         <div>
-                            <label for="layout-cols" id="layout-cols-label">한 줄에 5명</label>
+                            <label for="layout-cols" id="layout-cols-label">한 줄에</label>
                             <input type="number" id="layout-cols" value="5" min="1">
+                            <span id="unit-label">명</span>
                         </div>
                     </div>
-                     <hr>
-                    <div id="group-layout-controls">
-                         <div>
-                            <label for="group-mode">모둠 구성</label>
-                            <label class="switch">
-                                <input type="checkbox" id="group-mode">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        <div id="group-size-control" style="display: none;">
-                            <label for="group-size">한 모둠에</label>
-                            <input type="number" id="group-size" value="4" min="2">
-                             <span>명</span>
-                        </div>
-                    </div>
-                    <button id="apply-layout" class="btn">배치 적용</button>
+                    <button id="apply-layout" class="btn">배치 적용 (초기화)</button>
                 </div>
             </section>
 
             <!-- Actions -->
             <section>
-                <h3>기능</h3>
+                <h3>자리 바꾸기 & 정돈</h3>
                 <div class="btn-group">
-                    <button id="shuffle-seats" class="btn">좌석 랜덤 배정</button>
-                    <button id="reset-seats" class="btn">초기화</button>
+                    <button id="shuffle-seats" class="btn" style="background-color: #ffeb3b;">섞기 (랜덤 배정)</button>
+                    <button id="align-all-btn" class="btn" style="background-color: #8bc34a; color: white;">책상 줄 맞추기 (전체 정렬)</button>
                     <button id="toggle-hide" class="btn">책상 가리기</button>
                     <button id="fullscreen-btn" class="btn">전체 화면</button>
-                    <button id="save-preset" class="btn">미리 저장</button>
-                    <button id="export-pdf" class="btn">PDF로 저장</button>
+                    <button id="save-preset" class="btn">현재 상태 저장</button>
+                    <button id="export-pdf" class="btn">PDF 저장</button>
                 </div>
+                <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">* 책상을 드래그하여 옮길 수 있습니다. 줄 맞춤 가이드가 표시됩니다.</p>
             </section>
         </div>
 
         <!-- Seating Chart -->
         <div id="seating-chart-area" class="seating-chart-container custom-border">
             <div id="teacher-desk">교탁</div>
+            
+            <!-- 가이드 라인 요소들 -->
+            <div id="guide-v" class="guide-line v"></div>
+            <div id="guide-h" class="guide-line h"></div>
+
             <div id="fullscreen-controls">
-                <button id="fs-shuffle-btn" class="btn">랜덤 배정</button>
-                <button id="fs-reset-btn" class="btn">초기화</button>
-                <button id="fs-toggle-hide-btn" class="btn">책상 가리기</button>
-                <button id="fs-save-preset-btn" class="btn">미리 저장</button>
-                <button id="fs-export-pdf-btn" class="btn">PDF로 저장</button>
+                <button id="fs-shuffle-btn" class="btn">랜덤 섞기</button>
+                <button id="fs-align-btn" class="btn">전체 정렬</button>
+                <button id="fs-toggle-hide-btn" class="btn">가리기/보이기</button>
                 <button id="exit-fullscreen-btn" class="btn">나가기</button>
             </div>
             <div id="seating-chart">
@@ -544,11 +494,21 @@
         document.addEventListener('DOMContentLoaded', () => {
             // --- State Management ---
             let students = [];
-            let desks = [];
+            let desks = []; // { element, student, fixed, originalIndex, rotation, x, y }
             let nextStudentNumber = 1;
             let areDesksHidden = false;
-            let currentLayout = { mode: 'standard', cols: 5, isPair: false, groupSize: 4 };
+            let currentLayout = { 
+                mode: 'standard', 
+                cols: 5, 
+                isPair: false, 
+                direction: 'horizontal' // 'horizontal' or 'vertical'
+            };
             let editingStudentId = null;
+
+            // --- Constants ---
+            const DESK_WIDTH = 100;
+            const DESK_HEIGHT = 60;
+            const GRID_SIZE = 10; // 정렬 시 기준이 되는 눈금 크기를 더 세밀하게 조정
 
             // --- DOM Elements ---
             const uploadBtn = document.getElementById('upload-file');
@@ -562,23 +522,20 @@
             const seatingChartArea = document.getElementById('seating-chart-area');
             const seatingChartDiv = document.getElementById('seating-chart');
             const shuffleBtn = document.getElementById('shuffle-seats');
-            const resetBtn = document.getElementById('reset-seats');
+            const alignAllBtn = document.getElementById('align-all-btn');
             const toggleHideBtn = document.getElementById('toggle-hide');
             const savePresetBtn = document.getElementById('save-preset');
             const exportPdfBtn = document.getElementById('export-pdf');
             const pairModeCheckbox = document.getElementById('pair-mode');
             const layoutColsInput = document.getElementById('layout-cols');
-            const groupModeCheckbox = document.getElementById('group-mode');
-            const groupSizeControl = document.getElementById('group-size-control');
-            const groupSizeInput = document.getElementById('group-size');
             const applyLayoutBtn = document.getElementById('apply-layout');
             const fullscreenBtn = document.getElementById('fullscreen-btn');
             const exitFullscreenBtn = document.getElementById('exit-fullscreen-btn');
-            const fsShuffleBtn = document.getElementById('fs-shuffle-btn');
-            const fsResetBtn = document.getElementById('fs-reset-btn');
-            const fsToggleHideBtn = document.getElementById('fs-toggle-hide-btn');
-            const fsSavePresetBtn = document.getElementById('fs-save-preset-btn');
-            const fsExportPdfBtn = document.getElementById('fs-export-pdf-btn');
+            
+            const guideV = document.getElementById('guide-v');
+            const guideH = document.getElementById('guide-h');
+
+            const dirBtns = document.querySelectorAll('.direction-btn');
             const confirmModalOverlay = document.getElementById('confirm-modal-overlay');
             const confirmModalMessage = document.getElementById('confirm-modal-message');
             const confirmModalYes = document.getElementById('confirm-modal-yes');
@@ -599,10 +556,7 @@
             // --- Student Management ---
             function saveStudent() {
                 const name = studentNameInput.value.trim();
-                if (!name) {
-                    alert('학생 이름을 입력하세요.');
-                    return;
-                }
+                if (!name) return;
                 const number = parseInt(studentNumberInput.value);
                 const gender = document.querySelector('input[name="gender"]:checked').value;
 
@@ -611,14 +565,14 @@
                     return;
                 }
                 
-                if (editingStudentId) { // Update existing student
+                if (editingStudentId) {
                     const student = students.find(s => s.id === editingStudentId);
                     if (student) {
                         student.number = isNaN(number) ? student.number : number;
                         student.name = name;
                         student.gender = gender;
                     }
-                } else { // Add new student
+                } else {
                     const finalNumber = isNaN(number) ? nextStudentNumber : number;
                     students.push({ id: Date.now(), number: finalNumber, name, gender });
                 }
@@ -636,7 +590,7 @@
                     studentNumberInput.value = student.number;
                     studentNameInput.value = student.name;
                     document.querySelector(`input[name="gender"][value="${student.gender}"]`).checked = true;
-                    addStudentBtn.textContent = '학생 수정';
+                    addStudentBtn.textContent = '학생 수정 완료';
                     studentNameInput.focus();
                 }
             }
@@ -646,129 +600,13 @@
                 studentNumberInput.value = '';
                 studentNameInput.value = '';
                 document.querySelector('input[name="gender"][value="M"]').checked = true;
-                addStudentBtn.textContent = '학생 추가';
+                addStudentBtn.textContent = '학생 추가/수정';
             }
 
             function removeStudent(id) {
-                if (editingStudentId === id) {
-                    cancelEdit();
-                }
                 students = students.filter(s => s.id !== id);
                 updateStudentList();
                 updateNextStudentNumber();
-                if (desks.length > 0) {
-                    if (students.length === 0) {
-                        seatingChartDiv.innerHTML = '';
-                        desks = [];
-                    } else {
-                         handleLayoutApply();
-                    }
-                }
-            }
-            
-            function deleteAllStudents() {
-                students = [];
-                desks = [];
-                seatingChartDiv.innerHTML = '';
-                cancelEdit();
-                updateStudentList();
-                updateNextStudentNumber();
-            }
-
-            // --- File Handling (XLSX & CSV) ---
-            function handleFileUpload(event) {
-                const file = event.target.files[0];
-                if (!file) return;
-
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const data = e.target.result;
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    processData(json);
-                };
-                reader.onerror = (e) => {
-                    console.error("File reading error:", e);
-                    alert("파일을 읽는 중 오류가 발생했습니다.");
-                };
-                reader.readAsArrayBuffer(file);
-            }
-
-            function normalizeGender(genderStr) {
-                if (!genderStr) return 'M';
-                const maleKeywords = ['남자', '남성', '남', 'man', 'male', 'm'];
-                const femaleKeywords = ['여자', '여성', '여', 'woman', 'female', 'w', 'f'];
-                const lowerGender = String(genderStr).trim().toLowerCase();
-
-                if (maleKeywords.includes(lowerGender)) return 'M';
-                if (femaleKeywords.includes(lowerGender)) return 'F';
-                return 'M';
-            }
-
-            function processData(data) {
-                const tempStudents = [];
-                for (let i = 1; i < data.length; i++) {
-                    const row = data[i];
-                    if (row.length < 2 || !row[1]) continue;
-                    
-                    tempStudents.push({
-                        rawNumber: row[0] || '',
-                        name: String(row[1]).trim(),
-                        gender: normalizeGender(row[2] || '')
-                    });
-                }
-                
-                let maxNum = 0;
-                students = [];
-                
-                tempStudents.forEach(s => {
-                    const num = parseInt(s.rawNumber, 10);
-                    if (!isNaN(num)) {
-                        students.push({ id: Date.now() + Math.random(), number: num, name: s.name, gender: s.gender });
-                        if (num > maxNum) maxNum = num;
-                    }
-                });
-                
-                tempStudents.forEach(s => {
-                    const num = parseInt(s.rawNumber, 10);
-                    if (isNaN(num)) {
-                        maxNum++;
-                        while(students.some(s => s.number === maxNum)) {
-                            maxNum++;
-                        }
-                        students.push({ id: Date.now() + Math.random(), number: maxNum, name: s.name, gender: s.gender });
-                    }
-                });
-
-                students.sort((a, b) => a.number - b.number);
-                updateStudentList();
-                updateNextStudentNumber();
-                alert(`${students.length}명의 학생 명단을 불러왔습니다.`);
-                if (students.length > 0) {
-                    handleLayoutApply();
-                }
-            }
-            
-            function downloadCurrentCsv() {
-                if (students.length === 0) {
-                    alert('저장할 학생 명단이 없습니다.');
-                    return;
-                }
-                const header = ['번호', '이름', '성별'];
-                const rows = students.map(s => [s.number, s.name, s.gender]);
-                let csvContent = Papa.unparse([header, ...rows]);
-                
-                const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement("a");
-                const url = URL.createObjectURL(blob);
-                link.setAttribute("href", url);
-                link.setAttribute("download", "현재_학생명단.csv");
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
             }
 
             function updateStudentList() {
@@ -778,8 +616,8 @@
                     li.innerHTML = `
                         <span>${student.number}. ${student.name} (${student.gender})</span>
                         <div class="list-btn-group">
-                            <button class="btn-edit" data-id="${student.id}">수정</button>
-                            <button class="btn-remove" data-id="${student.id}">X</button>
+                            <button class="btn-edit" data-id="${student.id}">편집</button>
+                            <button class="btn-remove" data-id="${student.id}">삭제</button>
                         </div>
                     `;
                     studentListUl.appendChild(li);
@@ -787,30 +625,14 @@
             }
             
             function updateNextStudentNumber() {
-                if (students.length === 0) {
-                    nextStudentNumber = 1;
-                } else {
-                    const maxNum = Math.max(0, ...students.map(s => s.number));
-                    nextStudentNumber = maxNum + 1;
-                }
-                 studentNumberInput.placeholder = `번호 (${nextStudentNumber} 자동 부여)`;
+                nextStudentNumber = students.length === 0 ? 1 : Math.max(...students.map(s => s.number)) + 1;
+                studentNumberInput.placeholder = `번호 (${nextStudentNumber} 자동)`;
             }
 
             // --- Layout Management ---
             function handleLayoutApply() {
-                currentLayout.mode = groupModeCheckbox.checked ? 'group' : 'standard';
-                currentLayout.cols = parseInt(layoutColsInput.value);
+                currentLayout.cols = parseInt(layoutColsInput.value) || 5;
                 currentLayout.isPair = pairModeCheckbox.checked;
-                currentLayout.groupSize = parseInt(groupSizeInput.value);
-
-                if (currentLayout.mode === 'standard' && (isNaN(currentLayout.cols) || currentLayout.cols < 1)) {
-                     alert('한 줄에 배치할 인원(또는 쌍)은 1 이상이어야 합니다.');
-                     return;
-                }
-                 if (currentLayout.mode === 'group' && (isNaN(currentLayout.groupSize) || currentLayout.groupSize < 2)) {
-                     alert('한 모둠의 인원은 2 이상이어야 합니다.');
-                     return;
-                }
                 createLayout();
             }
 
@@ -824,81 +646,62 @@
                 desks = [];
                 for (let i = 0; i < students.length; i++) {
                     const student = students[i];
-                    const desk = createDeskElement(student, i);
-                    desks.push({ element: desk, student: student, fixed: false, originalIndex: i, rotation: 0 });
+                    const deskElement = createDeskElement(student, i);
+                    desks.push({ 
+                        element: deskElement, 
+                        student: student, 
+                        fixed: false, 
+                        originalIndex: i, 
+                        rotation: 0 
+                    });
                 }
                 arrangeAndScaleDesks();
             }
-            
-            function arrangeInGroups() {
-                seatingChartDiv.innerHTML = ''; // Clear for group cards
-                const groupSize = currentLayout.groupSize;
-                const studentCount = desks.length;
-                const numGroups = Math.ceil(studentCount / groupSize);
-
-                for (let i = 0; i < numGroups; i++) {
-                    const groupCard = document.createElement('div');
-                    groupCard.className = 'group-card';
-                    groupCard.innerHTML = `<div class="group-title">${i + 1}모둠</div>`;
-                    
-                    const desksInGroup = desks.slice(i * groupSize, (i + 1) * groupSize);
-                    
-                    let cardWidth = 0;
-                    let cardHeight = 0;
-                    const margin = 10;
-
-                    desksInGroup.forEach((deskData, j) => {
-                        const deskElement = deskData.element;
-                        const deskWidth = 100;
-                        const deskHeight = 60;
-                        
-                        let x = (j % 2) * (deskWidth + margin);
-                        let y = Math.floor(j / 2) * (deskHeight + margin);
-                        
-                        deskElement.style.left = `${x + margin}px`;
-                        deskElement.style.top = `${y + margin}px`;
-                        groupCard.appendChild(deskElement);
-
-                        cardWidth = Math.max(cardWidth, x + deskWidth);
-                        cardHeight = Math.max(cardHeight, y + deskHeight);
-                    });
-                    
-                    groupCard.style.width = `${cardWidth + (margin*2)}px`;
-                    groupCard.style.height = `${cardHeight + (margin*2)}px`;
-                    seatingChartDiv.appendChild(groupCard);
-                }
-            }
 
             function arrangeInStandard() {
-                 seatingChartDiv.innerHTML = ''; // Clear for individual desks
-                 desks.forEach(deskData => seatingChartDiv.appendChild(deskData.element));
+                seatingChartDiv.innerHTML = '';
+                desks.forEach(d => seatingChartDiv.appendChild(d.element));
 
-                 const { cols, isPair } = currentLayout;
-                 const studentCount = desks.length;
-                 const deskWidth = 100;
-                 const deskHeight = 60;
-                 const hGap = 20;
-                 const vGap = 40;
-                 const pairGap = 10;
+                const { cols, isPair, direction } = currentLayout;
+                const studentCount = desks.length;
+                const hGap = 20;
+                const vGap = 40;
+                const pairGap = 10;
 
-                 for (let i = 0; i < studentCount; i++) {
+                const effectiveItems = isPair ? Math.ceil(studentCount / 2) : studentCount;
+                const totalRows = Math.ceil(effectiveItems / cols);
+
+                for (let i = 0; i < studentCount; i++) {
                     const desk = desks[i].element;
                     let x, y;
                     
                     if (isPair) {
                         const pairIndex = Math.floor(i / 2);
-                        const row = Math.floor(pairIndex / cols);
-                        const colInRow = pairIndex % cols;
                         const isRightInPair = i % 2 !== 0;
+                        const pairWidth = DESK_WIDTH * 2 + pairGap;
 
-                        const pairWidth = deskWidth * 2 + pairGap;
-                        x = colInRow * (pairWidth + hGap) + (isRightInPair ? deskWidth + pairGap : 0);
-                        y = row * (deskHeight + vGap);
+                        let r, c;
+                        if (direction === 'horizontal') {
+                            r = Math.floor(pairIndex / cols);
+                            c = pairIndex % cols;
+                        } else {
+                            r = pairIndex % totalRows;
+                            c = Math.floor(pairIndex / totalRows);
+                        }
+
+                        x = c * (pairWidth + hGap) + (isRightInPair ? DESK_WIDTH + pairGap : 0);
+                        y = r * (DESK_HEIGHT + vGap);
                     } else {
-                        const row = Math.floor(i / cols);
-                        const col = i % cols;
-                        x = col * (deskWidth + hGap);
-                        y = row * (deskHeight + vGap);
+                        let r, c;
+                        if (direction === 'horizontal') {
+                            r = Math.floor(i / cols);
+                            c = i % cols;
+                        } else {
+                            r = i % totalRows;
+                            c = Math.floor(i / totalRows);
+                        }
+                        x = c * (DESK_WIDTH + hGap);
+                        y = r * (DESK_HEIGHT + vGap);
                     }
                     
                     desk.style.left = `${x}px`;
@@ -910,59 +713,25 @@
                 if (desks.length === 0) return;
                 
                 seatingChartDiv.style.transform = 'scale(1)';
-                desks.forEach(d => { d.element.style.transform = `rotate(${d.rotation}deg)`; });
-
-                if (currentLayout.mode === 'group') {
-                    arrangeInGroups();
-                    const groupCards = Array.from(seatingChartDiv.children);
-                    const groupsPerRow = Math.max(1, Math.floor((seatingChartArea.clientWidth - 20) / 350));
-                    const groupGap = 30;
-                    
-                    let currentX = 0;
-                    let currentY = 0;
-                    let maxRowHeight = 0;
-
-                    groupCards.forEach((card, i) => {
-                        if (i > 0 && i % groupsPerRow === 0) {
-                            currentX = 0;
-                            currentY += maxRowHeight + groupGap;
-                            maxRowHeight = 0;
-                        }
-                        card.style.left = `${currentX}px`;
-                        card.style.top = `${currentY}px`;
-                        currentX += card.offsetWidth + groupGap;
-                        maxRowHeight = Math.max(maxRowHeight, card.offsetHeight);
-                    });
-
-                } else {
-                    arrangeInStandard();
-                }
+                arrangeInStandard();
 
                 let maxW = 0, maxH = 0;
-                Array.from(seatingChartDiv.children).forEach(child => {
-                    maxW = Math.max(maxW, child.offsetLeft + child.offsetWidth);
-                    maxH = Math.max(maxH, child.offsetTop + child.offsetHeight);
+                desks.forEach(d => {
+                    maxW = Math.max(maxW, d.element.offsetLeft + d.element.offsetWidth);
+                    maxH = Math.max(maxH, d.element.offsetTop + d.element.offsetHeight);
                 });
 
                 const containerW = seatingChartArea.clientWidth;
                 const containerH = seatingChartArea.clientHeight;
-                const teacherDeskHeight = 50;
-                const teacherDeskMargin = 30;
-                const teacherDeskOffset = teacherDeskHeight + teacherDeskMargin;
-                const availableH = containerH - teacherDeskOffset;
+                const topOffset = 100;
                 
-                const scale = Math.min(containerW / (maxW + 20), availableH / (maxH + 20), 1);
+                const scale = Math.min(containerW / (maxW + 40), (containerH - topOffset) / (maxH + 40), 1);
                 
                 seatingChartDiv.style.width = `${maxW}px`;
                 seatingChartDiv.style.height = `${maxH}px`;
                 seatingChartDiv.style.transform = `scale(${scale})`;
-
-                const scaledWidth = maxW * scale;
-                const newLeft = (containerW - scaledWidth) / 2;
-                const newTop = teacherDeskOffset;
-
-                seatingChartDiv.style.left = `${Math.max(0, newLeft)}px`;
-                seatingChartDiv.style.top = `${newTop}px`;
+                seatingChartDiv.style.left = `${(containerW - maxW * scale) / 2}px`;
+                seatingChartDiv.style.top = `${topOffset}px`;
             }
 
             function createDeskElement(student, index) {
@@ -971,66 +740,48 @@
                 desk.dataset.index = index;
                 desk.innerHTML = `
                     <div class="desk-header">
-                        <button class="desk-btn btn-rotate">🔄</button>
+                        <button class="desk-btn btn-rotate" title="90도 회전">🔄</button>
                         <button class="desk-btn btn-fix">고정</button>
                     </div>
                     <div class="student-info">
-                        <div>
-                            <span class="student-number"></span>.
-                            <span class="student-name"></span>
-                        </div>
-                        <div class="student-gender"></div>
+                        <div><span class="student-number">${student.number}</span>. <span class="student-name">${student.name}</span></div>
+                        <div class="student-gender">(${student.gender})</div>
                     </div>
                 `;
-                updateDeskInfo(desk, student);
                 makeDraggable(desk);
                 return desk;
             }
 
             // --- Core Functions ---
-            function shuffleSeats(event) {
-                if (event && event.ctrlKey) {
-                    loadPreset();
-                    return;
-                }
-                const fixedStudents = desks.filter(d => d.fixed).map(d => d.student);
-                const unfixedDesks = desks.filter(d => !d.fixed);
-                let unfixedStudents = students.filter(s => !fixedStudents.some(fs => fs.id === s.id));
+            function alignAllDesks() {
+                if (desks.length === 0) return;
+                desks.forEach(deskData => {
+                    if (deskData.fixed) return;
+                    const el = deskData.element;
+                    const snappedLeft = Math.round(el.offsetLeft / 20) * 20;
+                    const snappedTop = Math.round(el.offsetTop / 20) * 20;
+                    el.style.left = snappedLeft + 'px';
+                    el.style.top = snappedTop + 'px';
+                });
+            }
 
+            function shuffleSeats() {
+                const unfixedDesks = desks.filter(d => !d.fixed);
+                const unfixedStudents = unfixedDesks.map(d => d.student);
                 for (let i = unfixedStudents.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [unfixedStudents[i], unfixedStudents[j]] = [unfixedStudents[j], unfixedStudents[i]];
                 }
-
-                unfixedDesks.forEach((desk, i) => {
-                    desk.student = unfixedStudents[i];
-                    updateDeskInfo(desk.element, desk.student);
+                unfixedDesks.forEach((deskData, i) => {
+                    deskData.student = unfixedStudents[i];
+                    updateDeskInfo(deskData.element, deskData.student);
                 });
-            }
-            
-            function resetSeats() {
-                if (desks.length === 0) return;
-                desks.sort((a,b) => a.originalIndex - b.originalIndex);
-                students.sort((a,b) => a.number - b.number);
-                desks.forEach((desk, i) => {
-                    desk.student = students[i];
-                });
-                createLayout();
             }
 
             function updateDeskInfo(deskElement, student) {
-                const numSpan = deskElement.querySelector('.student-number');
-                const nameSpan = deskElement.querySelector('.student-name');
-                const genderSpan = deskElement.querySelector('.student-gender');
-                if (student) {
-                    numSpan.textContent = student.number;
-                    nameSpan.textContent = student.name;
-                    genderSpan.textContent = `(${student.gender})`;
-                } else {
-                    numSpan.textContent = '';
-                    nameSpan.textContent = '빈자리';
-                    genderSpan.textContent = '';
-                }
+                deskElement.querySelector('.student-number').textContent = student.number;
+                deskElement.querySelector('.student-name').textContent = student.name;
+                deskElement.querySelector('.student-gender').textContent = `(${student.gender})`;
             }
 
             function toggleDeskFix(deskElement) {
@@ -1053,43 +804,19 @@
             function toggleHideAll() {
                 areDesksHidden = !areDesksHidden;
                 desks.forEach(d => d.element.classList.toggle('hidden', areDesksHidden));
-                const buttonText = areDesksHidden ? '전체 공개' : '책상 가리기';
-                toggleHideBtn.textContent = buttonText;
-                fsToggleHideBtn.textContent = buttonText;
-            }
-            
-            function revealSingleDesk(deskElement) {
-                if(areDesksHidden) {
-                    deskElement.classList.remove('hidden');
-                }
+                toggleHideBtn.textContent = areDesksHidden ? '전체 공개' : '책상 가리기';
             }
 
-            // --- Drag and Drop with Collision Detection ---
+            // --- Drag and Drop Logic (Improved Smoothness) ---
             function makeDraggable(element) {
                 element.onmousedown = e => {
                     if (e.target.classList.contains('desk-btn')) return;
-                    e.preventDefault();
+                    
                     const deskData = desks.find(d => d.element === element);
                     if (!deskData || deskData.fixed) return;
                     
                     element.classList.add('dragging');
-
-                    const isPair = currentLayout.mode === 'standard' && currentLayout.isPair;
-                    let partnerElement = null;
-                    let partnerStartLeft = 0;
-                    let partnerStartTop = 0;
-
-                    if (isPair) {
-                        const myIndex = deskData.originalIndex;
-                        const partnerIndex = (myIndex % 2 === 0) ? myIndex + 1 : myIndex - 1;
-                        const partnerData = desks.find(d => d.originalIndex === partnerIndex);
-                        if (partnerData) {
-                            partnerElement = partnerData.element;
-                            partnerElement.classList.add('dragging');
-                            partnerStartLeft = partnerElement.offsetLeft;
-                            partnerStartTop = partnerElement.offsetTop;
-                        }
-                    }
+                    seatingChartArea.classList.add('show-grid');
 
                     const scale = parseFloat(seatingChartDiv.style.transform.replace('scale(', '')) || 1;
                     const startLeft = element.offsetLeft;
@@ -1098,208 +825,194 @@
                     const startY = e.clientY;
 
                     document.onmousemove = e_drag => {
-                        e_drag.preventDefault();
-                        
+                        // 델타값을 스케일에 맞춰 정확하게 계산하여 부드러운 이동 보장
                         const dx = (e_drag.clientX - startX) / scale;
                         const dy = (e_drag.clientY - startY) / scale;
                         
-                        element.style.left = `${startLeft + dx}px`;
-                        element.style.top = `${startTop + dy}px`;
+                        let currentLeft = startLeft + dx;
+                        let currentTop = startTop + dy;
 
-                        if (partnerElement) {
-                            partnerElement.style.left = `${partnerStartLeft + dx}px`;
-                            partnerElement.style.top = `${partnerStartTop + dy}px`;
-                        }
+                        // 스냅 강도 조절 (임계값을 낮추어 더 섬세한 조작 가능하게 함)
+                        let showV = false, showH = false;
+                        let guideX = 0, guideY = 0;
+                        const snapThreshold = 6; // 자석 효과 범위를 10에서 6으로 낮춤
+
+                        desks.forEach(other => {
+                            if (other.element === element) return;
+                            const o = other.element;
+                            
+                            // 세로 가이드 정렬 체크
+                            const cxPoints = [o.offsetLeft, o.offsetLeft + DESK_WIDTH/2, o.offsetLeft + DESK_WIDTH];
+                            const mxPoints = [currentLeft, currentLeft + DESK_WIDTH/2, currentLeft + DESK_WIDTH];
+                            
+                            cxPoints.forEach(cx => {
+                                mxPoints.forEach((mx, mi) => {
+                                    if (Math.abs(cx - mx) < snapThreshold) {
+                                        currentLeft -= (mx - cx);
+                                        guideX = cx;
+                                        showV = true;
+                                    }
+                                });
+                            });
+
+                            // 가로 가이드 정렬 체크
+                            const cyPoints = [o.offsetTop, o.offsetTop + DESK_HEIGHT/2, o.offsetTop + DESK_HEIGHT];
+                            const myPoints = [currentTop, currentTop + DESK_HEIGHT/2, currentTop + DESK_HEIGHT];
+                            
+                            cyPoints.forEach(cy => {
+                                myPoints.forEach((my, mi) => {
+                                    if (Math.abs(cy - my) < snapThreshold) {
+                                        currentTop -= (my - cy);
+                                        guideY = cy;
+                                        showH = true;
+                                    }
+                                });
+                            });
+                        });
+
+                        element.style.left = `${currentLeft}px`;
+                        element.style.top = `${currentTop}px`;
+
+                        // 가이드 라인 렌더링
+                        if (showV) {
+                            guideV.style.display = 'block';
+                            guideV.style.left = (guideX * scale) + seatingChartDiv.offsetLeft + 'px';
+                        } else guideV.style.display = 'none';
+
+                        if (showH) {
+                            guideH.style.display = 'block';
+                            guideH.style.top = (guideY * scale) + seatingChartDiv.offsetTop + 'px';
+                        } else guideH.style.display = 'none';
                     };
 
                     document.onmouseup = () => {
                         element.classList.remove('dragging');
-                        if (partnerElement) {
-                            partnerElement.classList.remove('dragging');
-                        }
+                        seatingChartArea.classList.remove('show-grid');
+                        guideV.style.display = 'none';
+                        guideH.style.display = 'none';
                         document.onmouseup = null;
                         document.onmousemove = null;
                     };
                 };
             }
 
-            // --- Preset and PDF Functions ---
-            function savePreset() {
-                if (desks.length === 0) {
-                    alert('저장할 배치 정보가 없습니다.');
-                    return;
-                }
-                const preset = {
-                    layout: currentLayout,
-                    deskStates: desks.map(d => ({
-                        studentId: d.student ? d.student.id : null,
-                        fixed: d.fixed,
-                        left: d.element.style.left,
-                        top: d.element.style.top,
-                        rotation: d.rotation
-                    }))
-                };
-                localStorage.setItem('seatingChartPreset', JSON.stringify(preset));
-                alert('현재 배치를 저장했습니다.');
-            }
-
-            function loadPreset() {
-                const presetJSON = localStorage.getItem('seatingChartPreset');
-                if (!presetJSON) {
-                    return;
-                }
-                const preset = JSON.parse(presetJSON);
-                if (preset.deskStates.length !== students.length) {
-                    alert('저장된 배치의 학생 수와 현재 학생 수가 다릅니다.');
-                    return;
-                }
-
-                currentLayout = preset.layout;
-                groupModeCheckbox.checked = currentLayout.mode === 'group';
-                pairModeCheckbox.checked = currentLayout.isPair;
-                layoutColsInput.value = currentLayout.cols;
-                groupSizeInput.value = currentLayout.groupSize;
-                toggleLayoutControls();
-                
-                createLayout();
-
-                preset.deskStates.forEach((p, i) => {
-                    const deskData = desks[i];
-                    if(!deskData) return;
-
-                    const student = students.find(s => s.id === p.studentId);
-                    deskData.student = student;
-                    deskData.fixed = p.fixed;
-                    deskData.rotation = p.rotation || 0;
-                    updateDeskInfo(deskData.element, student);
-                    deskData.element.classList.toggle('fixed', p.fixed);
-                    deskData.element.querySelector('.btn-fix').textContent = p.fixed ? '해제' : '고정';
-                    deskData.element.style.left = p.left;
-                    deskData.element.style.top = p.top;
-                    deskData.element.style.transform = `rotate(${deskData.rotation}deg)`;
-                });
-                
-                if (areDesksHidden) {
-                    desks.forEach(d => d.element.classList.add('hidden'));
-                }
-
-                arrangeAndScaleDesks();
-            }
-
-            function exportToPDF() {
-                const chartArea = document.getElementById('seating-chart-area');
-                
-                // --- Modifications for PDF export ---
-                const deskHeaders = chartArea.querySelectorAll('.desk-header');
-                deskHeaders.forEach(header => header.style.display = 'none');
-
-                const fixedDesks = chartArea.querySelectorAll('.desk.fixed');
-                fixedDesks.forEach(desk => desk.classList.remove('fixed'));
-
-                alert('PDF 생성을 시작합니다. 잠시만 기다려주세요...');
-
-                html2canvas(chartArea, { scale: 2 }).then(canvas => {
-                    const imgData = canvas.toDataURL('image/png');
-                    const { jsPDF } = window.jspdf;
-                    const pdf = new jsPDF({
-                        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-                        unit: 'px',
-                        format: [canvas.width, canvas.height]
+            // --- File & Helper Functions ---
+            function processData(data) {
+                students = [];
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    if (row.length < 2 || !row[1]) continue;
+                    students.push({
+                        id: Date.now() + Math.random(),
+                        number: parseInt(row[0]) || (students.length + 1),
+                        name: String(row[1]).trim(),
+                        gender: row[2] === '여' || row[2] === 'F' ? 'F' : 'M'
                     });
-                    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-                    pdf.save("좌석배치도.pdf");
-                }).catch(err => {
-                    console.error("PDF 생성 오류:", err);
-                    alert("PDF 생성에 실패했습니다. 콘솔을 확인해주세요.");
-                }).finally(() => {
-                    // --- Restore original appearance after PDF generation ---
-                    deskHeaders.forEach(header => header.style.display = 'flex');
-                    fixedDesks.forEach(desk => desk.classList.add('fixed'));
-                });
-            }
-            
-            function toggleLayoutControls() {
-                const isGroup = groupModeCheckbox.checked;
-                document.getElementById('standard-layout-controls').style.display = isGroup ? 'none' : 'block';
-                document.getElementById('group-size-control').style.display = isGroup ? 'flex' : 'none';
-            }
-            
-            function toggleFullscreen() {
-                document.body.classList.toggle('fullscreen-mode');
-                fsToggleHideBtn.textContent = areDesksHidden ? '전체 공개' : '책상 가리기';
-                setTimeout(arrangeAndScaleDesks, 50);
+                }
+                students.sort((a, b) => a.number - b.number);
+                updateStudentList();
+                updateNextStudentNumber();
+                handleLayoutApply();
             }
 
             // --- Event Listeners ---
             addStudentBtn.addEventListener('click', saveStudent);
-            studentListUl.addEventListener('click', e => {
-                if (e.target.classList.contains('btn-remove')) {
-                    removeStudent(parseFloat(e.target.dataset.id));
-                } else if (e.target.classList.contains('btn-edit')) {
-                    editStudent(parseFloat(e.target.dataset.id));
-                }
-            });
             
-            // Electron & Web File Upload Logic
-            if (window.electronAPI) {
-                uploadBtn.addEventListener('click', () => {
-                    window.electronAPI.openFileDialog();
+            dirBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    dirBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentLayout.direction = btn.dataset.dir;
                 });
-                window.electronAPI.onFileOpened((file) => {
-                    const workbook = XLSX.read(file.content, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    processData(json);
-                });
-            } else {
-                uploadBtn.addEventListener('click', () => fileInput.click());
-                fileInput.addEventListener('change', handleFileUpload);
-            }
+            });
 
-            downloadCurrentCsvBtn.addEventListener('click', downloadCurrentCsv);
+            uploadBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const data = new Uint8Array(ev.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+                    processData(json);
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            downloadCurrentCsvBtn.addEventListener('click', () => {
+                if (students.length === 0) return;
+                const csv = Papa.unparse(students.map(s => [s.number, s.name, s.gender === 'M' ? '남' : '여']));
+                const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "학생명단.csv";
+                link.click();
+            });
+
             deleteAllStudentsBtn.addEventListener('click', () => {
-                showConfirm('정말로 모든 학생 명단을 삭제하시겠습니까?', deleteAllStudents);
+                showConfirm('모든 명단을 삭제하시겠습니까?', () => {
+                    students = []; desks = []; seatingChartDiv.innerHTML = '';
+                    updateStudentList(); updateNextStudentNumber();
+                });
             });
-            
-            confirmModalYes.addEventListener('click', () => {
-                if (confirmCallback) confirmCallback();
-                hideConfirm();
-            });
+
+            confirmModalYes.addEventListener('click', () => { if (confirmCallback) confirmCallback(); hideConfirm(); });
             confirmModalNo.addEventListener('click', hideConfirm);
-            
+
             applyLayoutBtn.addEventListener('click', handleLayoutApply);
-            groupModeCheckbox.addEventListener('change', toggleLayoutControls);
+            shuffleBtn.addEventListener('click', shuffleSeats);
+            alignAllBtn.addEventListener('click', alignAllDesks);
+            toggleHideBtn.addEventListener('click', toggleHideAll);
             
             seatingChartDiv.addEventListener('click', e => {
-                const target = e.target;
-                const deskElement = target.closest('.desk');
-                if (!deskElement) return;
-
-                if (target.classList.contains('btn-fix')) {
-                    toggleDeskFix(deskElement);
-                } else if (target.classList.contains('btn-rotate')) {
-                    rotateDesk(deskElement);
-                } else {
-                    revealSingleDesk(deskElement);
-                }
+                const desk = e.target.closest('.desk');
+                if (!desk) return;
+                if (e.target.classList.contains('btn-fix')) toggleDeskFix(desk);
+                else if (e.target.classList.contains('btn-rotate')) rotateDesk(desk);
+                else if (areDesksHidden) desk.classList.remove('hidden');
             });
-            shuffleBtn.addEventListener('click', shuffleSeats);
-            resetBtn.addEventListener('click', resetSeats);
-            toggleHideBtn.addEventListener('click', toggleHideAll);
-            savePresetBtn.addEventListener('click', savePreset);
-            exportPdfBtn.addEventListener('click', exportToPDF);
-            fullscreenBtn.addEventListener('click', toggleFullscreen);
-            exitFullscreenBtn.addEventListener('click', toggleFullscreen);
-            fsShuffleBtn.addEventListener('click', shuffleSeats);
-            fsResetBtn.addEventListener('click', resetSeats);
-            fsToggleHideBtn.addEventListener('click', toggleHideAll);
-            fsSavePresetBtn.addEventListener('click', savePreset);
-            fsExportPdfBtn.addEventListener('click', exportToPDF);
+
+            fullscreenBtn.addEventListener('click', () => {
+                document.body.classList.add('fullscreen-mode');
+                setTimeout(arrangeAndScaleDesks, 100);
+            });
+            exitFullscreenBtn.addEventListener('click', () => {
+                document.body.classList.remove('fullscreen-mode');
+                setTimeout(arrangeAndScaleDesks, 100);
+            });
             
+            document.getElementById('fs-shuffle-btn').addEventListener('click', shuffleSeats);
+            document.getElementById('fs-align-btn').addEventListener('click', alignAllDesks);
+            document.getElementById('fs-toggle-hide-btn').addEventListener('click', toggleHideAll);
+
+            savePresetBtn.addEventListener('click', () => {
+                const state = desks.map(d => ({
+                    id: d.student.id,
+                    left: d.element.style.left,
+                    top: d.element.style.top,
+                    rotation: d.rotation,
+                    fixed: d.fixed
+                }));
+                localStorage.setItem('seating_preset', JSON.stringify(state));
+                alert('현재 상태가 브라우저에 저장되었습니다.');
+            });
+
+            exportPdfBtn.addEventListener('click', () => {
+                const chart = document.getElementById('seating-chart-area');
+                const headers = chart.querySelectorAll('.desk-header');
+                headers.forEach(h => h.style.display = 'none');
+                
+                html2canvas(chart, { scale: 2 }).then(canvas => {
+                    const img = canvas.toDataURL('image/png');
+                    const pdf = new jspdf.jsPDF('l', 'px', [canvas.width, canvas.height]);
+                    pdf.addImage(img, 'PNG', 0, 0, canvas.width, canvas.height);
+                    pdf.save('좌석배치도.pdf');
+                    headers.forEach(h => h.style.display = 'flex');
+                });
+            });
+
             window.addEventListener('resize', arrangeAndScaleDesks);
-            
-            // --- Initial Setup ---
             updateNextStudentNumber();
         });
     </script>
