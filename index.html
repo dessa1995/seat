@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>자리 배치 프로그램 - 기능 강화판</title>
+    <title>자리 배치 프로그램 - PDF 개선판</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
@@ -21,6 +21,7 @@
             --button-bg: #eceff1;
             --button-hover-bg: #cfd8dc;
             --accent-color: #e53935;
+            --guide-line-color: #03a9f4;
             --grid-size: 50px; 
         }
 
@@ -277,6 +278,7 @@
             let areDesksHidden = false;
             let isFlipped = false; 
             let selectedDeskForSwap = null; 
+            let editingStudentId = null;
 
             const DESK_WIDTH = 100;
             const DESK_HEIGHT = 60;
@@ -327,7 +329,11 @@
                         deskElement.style.left = data.left;
                         deskElement.style.top = data.top;
                         const deskObj = { element: deskElement, student: student, fixed: !!data.fixed, rotation: data.rotation || 0 };
-                        if (data.fixed) deskElement.classList.add('fixed');
+                        if (data.fixed) {
+                            deskElement.classList.add('fixed');
+                            const fixBtn = deskElement.querySelector('.btn-fix');
+                            if (fixBtn) fixBtn.textContent = '해제';
+                        }
                         deskElement.style.transform = `rotate(${data.rotation}deg)`;
                         desks.push(deskObj);
                         seatingChartDiv.appendChild(deskElement);
@@ -378,6 +384,26 @@
                 }
                 studentNameInput.value = ''; updateStudentList(); saveToStorage();
             };
+
+            function shuffleSeats() {
+                const targets = desks.filter(d => !d.fixed);
+                const studs = targets.map(d => d.student);
+                for (let i = studs.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [studs[i], studs[j]] = [studs[j], studs[i]];
+                }
+                targets.forEach((d, i) => { d.student = studs[i]; updateDeskInfo(d.element, d.student); });
+                saveToStorage();
+            }
+
+            function toggleHideAll() {
+                areDesksHidden = !areDesksHidden;
+                desks.forEach(d => d.element.classList.toggle('hidden', areDesksHidden));
+                const text = areDesksHidden ? '이름 보이기' : '이름 가리기';
+                document.getElementById('toggle-hide').textContent = text;
+                const fsBtn = document.getElementById('fs-toggle-hide-btn');
+                if (fsBtn) fsBtn.textContent = text;
+            }
 
             function createDeskElement(student, index) {
                 const desk = document.createElement('div');
@@ -605,9 +631,8 @@
                             });
                         } else {
                             let nl = initialLeft + dx, nt = initialTop + dy;
-                            // 근처 정답 포인트로 스냅
                             points.forEach(p => {
-                                if (Math.abs(p.x - nl) < 20 && Math.abs(p.y - nt) < 20) { nl = p.x; nt = p.y; }
+                                if (Math.abs(p.x - nl) < 25 && Math.abs(p.y - nt) < 25) { nl = p.x; nt = p.y; }
                             });
                             el.style.left = nl + 'px'; el.style.top = nt + 'px';
                         }
@@ -621,25 +646,17 @@
                 };
             }
 
-            document.getElementById('shuffle-seats').onclick = () => {
-                const targets = desks.filter(d => !d.fixed);
-                const studs = targets.map(d => d.student);
-                for (let i = studs.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [studs[i], studs[j]] = [studs[j], studs[i]];
-                }
-                targets.forEach((d, i) => { d.student = studs[i]; updateDeskInfo(d.element, d.student); });
-                saveToStorage();
-            };
+            document.getElementById('shuffle-seats').onclick = shuffleSeats;
+            const fsShuffle = document.getElementById('fs-shuffle-btn');
+            if (fsShuffle) fsShuffle.onclick = shuffleSeats;
+            
+            document.getElementById('toggle-hide').onclick = toggleHideAll;
+            const fsHide = document.getElementById('fs-toggle-hide-btn');
+            if (fsHide) fsHide.onclick = toggleHideAll;
 
             document.getElementById('align-all-btn').onclick = alignAllDesks;
             document.getElementById('center-align-btn').onclick = centerAlignAll;
             document.getElementById('apply-layout').onclick = createLayout;
-            document.getElementById('toggle-hide').onclick = () => {
-                areDesksHidden = !areDesksHidden;
-                desks.forEach(d => d.element.classList.toggle('hidden', areDesksHidden));
-                document.getElementById('toggle-hide').textContent = areDesksHidden ? '이름 보이기' : '이름 가리기';
-            };
 
             document.getElementById('delete-all-students').onclick = () => {
                 confirmModalOverlay.style.display = 'flex';
@@ -656,27 +673,91 @@
 
             document.getElementById('export-pdf').onclick = () => {
                 const area = document.getElementById('seating-chart-area');
-                const hs = area.querySelectorAll('.desk-header');
-                hs.forEach(h => h.style.visibility = 'hidden');
                 
-                // 컨텐츠의 실제 범위를 계산하여 여백 확보
+                // 임시로 레이아웃 정보를 계산합니다 (잘림 방지용)
+                let minX = 0, minY = 0, maxX = 0, maxY = 0;
+                desks.forEach(d => {
+                    const l = parseInt(d.element.style.left);
+                    const t = parseInt(d.element.style.top);
+                    maxX = Math.max(maxX, l + DESK_WIDTH);
+                    maxY = Math.max(maxY, t + DESK_HEIGHT);
+                });
+
                 html2canvas(area, { 
-                    scale: 2, 
+                    scale: 3, 
                     useCORS: true,
                     backgroundColor: '#ffffff',
                     onclone: (clonedDoc) => {
+                        // 1. 고정 좌석 색상 제거 (요청 사항 1 반영)
+                        const fixedDesks = clonedDoc.querySelectorAll('.desk.fixed');
+                        fixedDesks.forEach(d => {
+                            d.style.backgroundColor = '#ffffff';
+                            d.classList.remove('fixed');
+                        });
+
+                        // 2. 불필요한 UI 숨기기
+                        const hs = clonedDoc.querySelectorAll('.desk-header, #fullscreen-controls');
+                        hs.forEach(h => h.style.display = 'none');
+
+                        // 3. 레이아웃 재구성 (요청 사항 2 반영 - 잘림 방지)
                         const clonedArea = clonedDoc.getElementById('seating-chart-area');
-                        clonedArea.style.padding = "40px"; // 상하좌우 여백 강제 추가
+                        const clonedChart = clonedDoc.getElementById('seating-chart');
+                        const clonedTeacher = clonedDoc.getElementById('teacher-desk');
+
+                        // 캡처용 캔버스는 스케일을 1로 초기화하여 원본 좌표를 잡습니다.
+                        clonedChart.style.transform = 'scale(1)';
+                        clonedChart.style.left = '0px';
+                        clonedChart.style.top = isFlipped ? '40px' : '100px';
+
+                        // 전체 영역 크기를 내용물에 맞게 강제 확장
+                        const contentHeight = maxY + (isFlipped ? 150 : 200);
+                        const contentWidth = maxX + 40;
+
+                        clonedArea.style.width = contentWidth + "px";
+                        clonedArea.style.height = contentHeight + "px";
+                        clonedArea.style.padding = "20px";
+                        clonedArea.style.display = "block";
+                        clonedArea.style.position = "relative";
+                        clonedArea.style.border = "none";
+                        clonedArea.style.boxShadow = "none";
+
+                        // 교탁 위치 보정
+                        if (isFlipped) {
+                            clonedTeacher.style.bottom = "20px";
+                            clonedTeacher.style.top = "auto";
+                        } else {
+                            clonedTeacher.style.top = "20px";
+                            clonedTeacher.style.bottom = "auto";
+                        }
+                        clonedTeacher.style.left = (contentWidth / 2) + "px";
                     }
                 }).then(canvas => {
                     const { jsPDF } = window.jspdf;
                     const pdf = new jsPDF('l', 'mm', 'a4');
+                    const pw = pdf.internal.pageSize.getWidth();
+                    const ph = pdf.internal.pageSize.getHeight();
+                    
                     const margin = 10;
-                    const w = pdf.internal.pageSize.getWidth() - (margin * 2);
-                    const h = (canvas.height * w) / canvas.width;
-                    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, (pdf.internal.pageSize.getHeight() - h) / 2, w, h);
+                    const availableW = pw - (margin * 2);
+                    const availableH = ph - (margin * 2);
+
+                    const canvasAspect = canvas.width / canvas.height;
+                    const pageAspect = availableW / availableH;
+
+                    let finalW, finalH;
+                    if (canvasAspect > pageAspect) {
+                        finalW = availableW;
+                        finalH = finalW / canvasAspect;
+                    } else {
+                        finalH = availableH;
+                        finalW = finalH * canvasAspect;
+                    }
+                    
+                    const x = (pw - finalW) / 2;
+                    const y = (ph - finalH) / 2;
+
+                    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, finalW, finalH);
                     pdf.save('교실_자리배치도.pdf');
-                    hs.forEach(h => h.style.visibility = 'visible');
                 });
             };
 
